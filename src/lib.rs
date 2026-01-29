@@ -124,10 +124,10 @@ pub enum Security {
 
 #[derive(Clone, Debug)]
 pub struct ServiceDeskOptions {
-    user_agent: Option<String>,
-    timeout: Option<Duration>,
-    security: Option<Security>,
-    default_headers: Option<HeaderMap>,
+    pub user_agent: Option<String>,
+    pub timeout: Option<Duration>,
+    pub security: Option<Security>,
+    pub default_headers: Option<HeaderMap>,
 }
 
 static SDP_HEADER: (HeaderName, HeaderValue) = (
