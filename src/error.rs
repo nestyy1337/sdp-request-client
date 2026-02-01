@@ -140,8 +140,14 @@ mod tests {
         assert_eq!(SdpErrorCode::from(4009), SdpErrorCode::NonEditableField);
         assert_eq!(SdpErrorCode::from(4010), SdpErrorCode::InternalField);
         assert_eq!(SdpErrorCode::from(4011), SdpErrorCode::NoSuchField);
-        assert_eq!(SdpErrorCode::from(4012), SdpErrorCode::MissingMandatoryField);
-        assert_eq!(SdpErrorCode::from(4013), SdpErrorCode::UnsupportedContentType);
+        assert_eq!(
+            SdpErrorCode::from(4012),
+            SdpErrorCode::MissingMandatoryField
+        );
+        assert_eq!(
+            SdpErrorCode::from(4013),
+            SdpErrorCode::UnsupportedContentType
+        );
         assert_eq!(SdpErrorCode::from(4014), SdpErrorCode::ReadOnlyField);
         assert_eq!(SdpErrorCode::from(4015), SdpErrorCode::RateLimitExceeded);
         assert_eq!(SdpErrorCode::from(4016), SdpErrorCode::AlreadyInTrash);
