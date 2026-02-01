@@ -1,3 +1,38 @@
+//! Async Rust client for the ManageEngine ServiceDesk Plus REST API v3.
+//!
+//! # Quick Start
+//!
+//! ```no_run
+//! use sdp_request_client::{ServiceDesk, ServiceDeskOptions, Credentials};
+//! use reqwest::Url;
+//!
+//! # async fn example() -> Result<(), sdp_request_client::Error> {
+//! let client = ServiceDesk::new(
+//!     Url::parse("https://sdp.example.com")?,
+//!     Credentials::Token { token: "your-token".into() },
+//!     ServiceDeskOptions::default(),
+//! );
+//!
+//! // Search tickets
+//! let tickets = client.tickets().search().open().limit(10).fetch().await?;
+//!
+//! // Create a ticket
+//! let response = client.tickets()
+//!     .create()
+//!     .subject("Server issue")
+//!     .requester("John Doe")
+//!     .send()
+//!     .await?;
+//!
+//! // Ticket operations
+//! client.ticket(12345).add_note("Investigating...").await?;
+//! client.ticket(12345).close("Resolved").await?;
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! See [`ServiceDesk`] for the main entry point.
+
 use chrono::Duration;
 use reqwest::{
     Url,
@@ -22,12 +57,15 @@ pub use client::{
 };
 pub use error::{Error, SdpErrorCode};
 
+/// Type-safe wrapper for User ID in SDP
 #[derive(Clone, Deserialize, Serialize, Debug, PartialEq, Eq, Hash, Default)]
 pub struct UserID(pub String);
 
+/// Type-safe wrapper for Ticket ID in SDP
 #[derive(Clone, Debug)]
 pub struct TicketID(pub u64);
 
+/// Type-safe wrapper for Note ID in SDP
 #[derive(Clone, Debug)]
 pub struct NoteID(pub u64);
 
@@ -109,6 +147,10 @@ impl std::fmt::Display for UserID {
     }
 }
 
+/// Main client for interacting with ServiceDesk Plus API.
+///
+/// Use [`tickets()`](Self::tickets) for search/create operations,
+/// or [`ticket(id)`](Self::ticket) for single-ticket operations.
 #[derive(Clone)]
 pub struct ServiceDesk {
     pub base_url: Url,
@@ -116,15 +158,19 @@ pub struct ServiceDesk {
     inner: reqwest::Client,
 }
 
+/// Security options for the ServiceDesk client
+/// Not finished yet!!
 #[derive(Clone, Debug)]
 pub enum Security {
     Unsafe,
     NativeTlS,
 }
 
+/// Configuration options for the ServiceDesk client
 #[derive(Clone, Debug)]
 pub struct ServiceDeskOptions {
     user_agent: Option<String>,
+    /// Request timeout duration
     timeout: Option<Duration>,
     security: Option<Security>,
     default_headers: Option<HeaderMap>,
@@ -147,6 +193,7 @@ impl Default for ServiceDeskOptions {
 }
 
 impl ServiceDesk {
+    /// Create a new ServiceDesk client instance
     pub fn new(base_url: Url, credentials: Credentials, options: ServiceDeskOptions) -> Self {
         let mut headers = options.default_headers.unwrap_or_default();
 

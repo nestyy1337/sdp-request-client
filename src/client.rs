@@ -9,6 +9,10 @@ pub struct InnerResponseMessage {
     message: String,
 }
 
+/// Generic SDP response status structure
+/// Used to parse error responses from the SDP API since SDP uses a non-standard error response format
+/// including weird status codes. Partially they are converted to proper HTTP status codes by Error
+/// conversion.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SdpResponseStatus {
     pub status_code: u32,
@@ -36,7 +40,12 @@ struct SdpGenericResponse {
 }
 
 impl ServiceDesk {
-    async fn request_json<T, R>(&self, method: Method, path: &str, body: &T) -> Result<R, Error>
+    pub(crate) async fn request_json<T, R>(
+        &self,
+        method: Method,
+        path: &str,
+        body: &T,
+    ) -> Result<R, Error>
     where
         T: Serialize + ?Sized + std::fmt::Debug,
         R: DeserializeOwned,
@@ -54,7 +63,12 @@ impl ServiceDesk {
         Ok(parsed)
     }
 
-    async fn request_form<T, R>(&self, method: Method, path: &str, body: &T) -> Result<R, Error>
+    pub(crate) async fn request_form<T, R>(
+        &self,
+        method: Method,
+        path: &str,
+        body: &T,
+    ) -> Result<R, Error>
     where
         T: Serialize + ?Sized + std::fmt::Debug,
         R: DeserializeOwned,
@@ -143,6 +157,10 @@ impl ServiceDesk {
         Ok(resp.request)
     }
 
+    /// Edit an existing ticket.
+    /// Some of the fields are optional and can be left as None if not being changed.
+    /// Some fields might be missing due to SDP API restrictions, like account assignment
+    /// to a given ticket being immutable after creation.
     pub async fn edit(
         &self,
         ticket_id: impl Into<TicketID>,
@@ -255,6 +273,7 @@ impl ServiceDesk {
         Ok(())
     }
 
+    /// Assign a ticket to a technician.
     pub async fn assign_ticket(
         &self,
         ticket_id: impl Into<TicketID>,
@@ -274,6 +293,7 @@ impl ServiceDesk {
         Ok(())
     }
 
+    /// Create a new ticket.
     pub async fn create_ticket(&self, data: &CreateTicketData) -> Result<TicketResponse, Error> {
         let resp = self
             .request_input_data(
@@ -285,6 +305,11 @@ impl ServiceDesk {
         Ok(resp)
     }
 
+    /// Search for tickets based on specified criteria.
+    /// The criteria can be built using the `Criteria` struct.
+    /// The default method of querying is not straightforward, [`Criteria`] struct
+    /// on the 'root' level contains a single condition, to combine multiple conditions
+    /// use the 'children' field with appropriate 'logical_operator'.
     pub async fn search_tickets(&self, criteria: Criteria) -> Result<Vec<DetailedTicket>, Error> {
         let resp = self
             .request_input_data(
@@ -304,6 +329,7 @@ impl ServiceDesk {
         Ok(ticket_response.requests)
     }
 
+    /// Close a ticket with closure comments.
     pub async fn close_ticket(
         &self,
         ticket_id: impl Into<TicketID>,
@@ -326,7 +352,17 @@ impl ServiceDesk {
         Ok(())
     }
 
+    /// Merge multiple tickets into a single ticket.
+    /// Key point to note is that the maximum number of tickets that can be merged at once is 49 +
+    /// 1 (the target ticket), so the `merge_ids` slice must not exceed 49 IDs.
     pub async fn merge(&self, ticket_id: usize, merge_ids: &[usize]) -> Result<(), Error> {
+        if merge_ids.len() > 49 {
+            return Err(Error::from_sdp(
+                400,
+                "Cannot merge more than 49 tickets at once".to_string(),
+                None,
+            ));
+        }
         let merge_requests: Vec<MergeRequestId> = merge_ids
             .iter()
             .map(|id| MergeRequestId { id: id.to_string() })
@@ -359,6 +395,10 @@ pub struct ListInfo {
     pub search_criteria: Criteria,
 }
 
+/// Criteria structure for building search queries.
+/// This structure allows for complex nested criteria using logical operators.
+/// The inner field, condition, and value define a single search condition.
+/// The children field allows for nesting additional criteria, combined using the specified logical operator.
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct Criteria {
     pub field: String,
@@ -384,6 +424,8 @@ impl Default for Criteria {
     }
 }
 
+/// Condition enum for specifying search conditions in criteria.
+/// Used in the Criteria struct to define how to compare field values.
 #[derive(Deserialize, Serialize, Debug, Clone)]
 #[serde(rename_all = "snake_case")]
 pub enum Condition {
@@ -397,6 +439,7 @@ pub enum Condition {
     Contains,
 }
 
+/// Logical operators for combining multiple criteria.
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub enum LogicalOp {
     #[serde(rename = "AND")]

@@ -1,17 +1,20 @@
 //! Fluent builders for SDP API operations.
 //!
 //! # Example
-//! ```ignore
-//! // Search for tickets
+//! ```no_run
+//! # use sdp_request_client::{ServiceDesk, ServiceDeskOptions, Credentials};
+//! # use reqwest::Url;
+//! # async fn example() -> Result<(), sdp_request_client::Error> {
+//! # let client = ServiceDesk::new(Url::parse("https://sdp.example.com").unwrap(), Credentials::Token { token: "".into() }, ServiceDeskOptions::default());
+//! // Search for open tickets (default limit: 100)
 //! let tickets = client.tickets()
 //!     .search()
-//!     .status("Open")
-//!     .created_after(Local::now() - Duration::hours(24))
+//!     .open()
 //!     .limit(50)
 //!     .fetch()
 //!     .await?;
 //!
-//! // Create a ticket
+//! // Create a ticket (subject and requester required, priority defaults to "Low")
 //! let ticket = client.tickets()
 //!     .create()
 //!     .subject("[CLIENT] Alert Name")
@@ -21,14 +24,11 @@
 //!     .send()
 //!     .await?;
 //!
-//! // Operations on a single ticket
-//! client.ticket(12345)
-//!     .add_note("Resolved by automation")
-//!     .await?;
-//!
-//! client.ticket(12345)
-//!     .close("Closed by automation")
-//!     .await?;
+//! // Single ticket operations
+//! client.ticket(12345).add_note("Resolved by automation").await?;
+//! client.ticket(12345).close("Closed by automation").await?;
+//! # Ok(())
+//! # }
 //! ```
 
 use chrono::{DateTime, Local};
@@ -50,6 +50,7 @@ pub struct TicketsClient<'a> {
 }
 
 impl<'a> TicketsClient<'a> {
+    /// Start building a ticket search query. Default limit is 100.
     pub fn search(self) -> TicketSearchBuilder<'a> {
         TicketSearchBuilder {
             client: self.client,
@@ -128,6 +129,7 @@ impl<'a> TicketClient<'a> {
         self.client.merge(self.id.0 as usize, &ids).await
     }
 
+    /// Edit ticket fields.
     pub async fn edit(self, data: &EditTicketData) -> Result<(), Error> {
         self.client.edit(self.id, data).await
     }
@@ -149,6 +151,8 @@ impl<'a> TicketClient<'a> {
 }
 
 /// Builder for searching tickets.
+///
+/// All filter methods are optional. Default limit is 100 results.
 pub struct TicketSearchBuilder<'a> {
     client: &'a ServiceDesk,
     root_criteria: Option<Criteria>,
@@ -156,6 +160,7 @@ pub struct TicketSearchBuilder<'a> {
     row_count: u32,
 }
 
+/// Ticket status filter values.
 #[derive(Debug)]
 pub enum TicketStatus {
     Open,
@@ -189,6 +194,7 @@ impl<'a> TicketSearchBuilder<'a> {
         self
     }
 
+    /// Filter by ticket status using the [`TicketStatus`] enum.
     pub fn filter(self, filter: &TicketStatus) -> Self {
         self.status(&filter.to_string())
     }
@@ -263,13 +269,13 @@ impl<'a> TicketSearchBuilder<'a> {
         self
     }
 
-    /// Set maximum number of results.
+    /// Set maximum number of results. Default: 100.
     pub fn limit(mut self, count: u32) -> Self {
         self.row_count = count;
         self
     }
 
-    /// Add a raw criteria
+    /// Add a raw [`Criteria`] for complex queries.
     pub fn criteria(mut self, criteria: Criteria) -> Self {
         if self.root_criteria.is_none() {
             self.root_criteria = Some(criteria);
@@ -316,6 +322,9 @@ impl<'a> TicketSearchBuilder<'a> {
 }
 
 /// Builder for creating tickets.
+///
+/// Required: [`subject`](Self::subject), [`requester`](Self::requester).
+/// Default priority: "Low".
 pub struct TicketCreateBuilder<'a> {
     client: &'a ServiceDesk,
     subject: Option<String>,
@@ -346,7 +355,7 @@ impl<'a> TicketCreateBuilder<'a> {
         self
     }
 
-    /// Set the priority
+    /// Set the priority. Default: "Low".
     pub fn priority(mut self, priority: impl Into<String>) -> Self {
         self.priority = priority.into();
         self
@@ -394,6 +403,8 @@ impl<'a> TicketCreateBuilder<'a> {
 }
 
 /// Builder for adding notes with custom settings.
+///
+/// All boolean options default to `false`.
 pub struct NoteBuilder<'a> {
     client: &'a ServiceDesk,
     ticket_id: TicketID,

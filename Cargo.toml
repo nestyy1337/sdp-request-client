@@ -2,6 +2,11 @@
 name = "sdp-request-client"
 version = "0.1.0"
 edition = "2024"
+license = "MIT"
+description = "A Rust client for making requests to the SDP API."
+repository = "https://github.com/nestyy1337/sdp-request-client"
+keywords = ["sdp", "api", "client"]
+categories = ["api-clients"]
 
 [dependencies]
 chrono = "0.4.43"
@@ -17,3 +22,5 @@ url = "2.5.8"
 [dev-dependencies]
 tokio = { version = "1.49.0", features = ["full"] }
 dotenv = "0.15.0"
+
+
