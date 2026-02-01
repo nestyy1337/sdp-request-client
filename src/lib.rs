@@ -169,11 +169,11 @@ pub enum Security {
 /// Configuration options for the ServiceDesk client
 #[derive(Clone, Debug)]
 pub struct ServiceDeskOptions {
-    user_agent: Option<String>,
+    pub user_agent: Option<String>,
     /// Request timeout duration
-    timeout: Option<Duration>,
-    security: Option<Security>,
-    default_headers: Option<HeaderMap>,
+    pub timeout: Option<Duration>,
+    pub security: Option<Security>,
+    pub default_headers: Option<HeaderMap>,
 }
 
 static SDP_HEADER: (HeaderName, HeaderValue) = (
