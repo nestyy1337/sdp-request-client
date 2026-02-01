@@ -122,3 +122,104 @@ impl Error {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sdp_error_code_from_u32() {
+        assert_eq!(SdpErrorCode::from(2000), SdpErrorCode::Success);
+        assert_eq!(SdpErrorCode::from(4001), SdpErrorCode::InvalidValue);
+        assert_eq!(SdpErrorCode::from(4002), SdpErrorCode::Forbidden);
+        assert_eq!(SdpErrorCode::from(4003), SdpErrorCode::ClosureRuleViolation);
+        assert_eq!(SdpErrorCode::from(4004), SdpErrorCode::Internal);
+        assert_eq!(SdpErrorCode::from(4005), SdpErrorCode::ReferenceExists);
+        assert_eq!(SdpErrorCode::from(4007), SdpErrorCode::NotFound);
+        assert_eq!(SdpErrorCode::from(4008), SdpErrorCode::NotUnique);
+        assert_eq!(SdpErrorCode::from(4009), SdpErrorCode::NonEditableField);
+        assert_eq!(SdpErrorCode::from(4010), SdpErrorCode::InternalField);
+        assert_eq!(SdpErrorCode::from(4011), SdpErrorCode::NoSuchField);
+        assert_eq!(
+            SdpErrorCode::from(4012),
+            SdpErrorCode::MissingMandatoryField
+        );
+        assert_eq!(
+            SdpErrorCode::from(4013),
+            SdpErrorCode::UnsupportedContentType
+        );
+        assert_eq!(SdpErrorCode::from(4014), SdpErrorCode::ReadOnlyField);
+        assert_eq!(SdpErrorCode::from(4015), SdpErrorCode::RateLimitExceeded);
+        assert_eq!(SdpErrorCode::from(4016), SdpErrorCode::AlreadyInTrash);
+        assert_eq!(SdpErrorCode::from(4017), SdpErrorCode::NotInTrash);
+        assert_eq!(SdpErrorCode::from(7001), SdpErrorCode::LicenseRestriction);
+        assert_eq!(SdpErrorCode::from(9999), SdpErrorCode::Unknown);
+        assert_eq!(SdpErrorCode::from(0), SdpErrorCode::Unknown);
+    }
+
+    #[test]
+    fn error_from_sdp_maps_correctly() {
+        assert!(matches!(
+            Error::from_sdp(4001, "msg".into(), None),
+            Error::InvalidValue(_)
+        ));
+        assert!(matches!(
+            Error::from_sdp(4002, "msg".into(), None),
+            Error::Forbidden(_)
+        ));
+        assert!(matches!(
+            Error::from_sdp(4004, "msg".into(), None),
+            Error::Internal
+        ));
+        assert!(matches!(
+            Error::from_sdp(4005, "msg".into(), None),
+            Error::ReferenceExists
+        ));
+        assert!(matches!(
+            Error::from_sdp(4007, "msg".into(), None),
+            Error::NotFound(_)
+        ));
+        assert!(matches!(
+            Error::from_sdp(4009, "msg".into(), None),
+            Error::NotEditable(_)
+        ));
+        assert!(matches!(
+            Error::from_sdp(4014, "msg".into(), None),
+            Error::NotEditable(_)
+        ));
+        assert!(matches!(
+            Error::from_sdp(4012, "msg".into(), None),
+            Error::MissingField(_)
+        ));
+        assert!(matches!(
+            Error::from_sdp(4015, "msg".into(), None),
+            Error::RateLimited
+        ));
+        assert!(matches!(
+            Error::from_sdp(7001, "msg".into(), None),
+            Error::LicenseRestricted
+        ));
+        assert!(matches!(
+            Error::from_sdp(9999, "msg".into(), None),
+            Error::Sdp { .. }
+        ));
+    }
+
+    #[test]
+    fn error_from_sdp_uses_field_when_provided() {
+        let err = Error::from_sdp(4001, "message".into(), Some("field_name".into()));
+        match err {
+            Error::InvalidValue(s) => assert_eq!(s, "field_name"),
+            _ => panic!("expected InvalidValue"),
+        }
+    }
+
+    #[test]
+    fn error_from_sdp_uses_message_when_no_field() {
+        let err = Error::from_sdp(4001, "message".into(), None);
+        match err {
+            Error::InvalidValue(s) => assert_eq!(s, "message"),
+            _ => panic!("expected InvalidValue"),
+        }
+    }
+}

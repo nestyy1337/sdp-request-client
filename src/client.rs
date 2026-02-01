@@ -808,3 +808,30 @@ pub struct TemplateInfo {
     pub id: String,
     pub name: String,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn criteria_default() {
+        let criteria = Criteria::default();
+        assert!(criteria.field.is_empty());
+        assert!(matches!(criteria.condition, Condition::Is));
+        assert!(criteria.value.is_null());
+        assert!(criteria.children.is_empty());
+        assert!(criteria.logical_operator.is_none());
+    }
+
+    #[test]
+    fn create_ticket_data_default() {
+        let data = CreateTicketData::default();
+        assert!(data.subject.is_empty());
+        assert!(data.description.is_empty());
+        assert!(data.requester.name.is_empty());
+        assert_eq!(data.priority.name, "Low");
+        assert!(data.udf_fields.is_null());
+        assert!(data.account.name.is_empty());
+        assert!(data.template.name.is_empty());
+    }
+}
