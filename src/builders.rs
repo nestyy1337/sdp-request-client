@@ -475,3 +475,16 @@ impl ServiceDesk {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ticket_status_display() {
+        assert_eq!(TicketStatus::Open.to_string(), "Open");
+        assert_eq!(TicketStatus::Closed.to_string(), "Closed");
+        assert_eq!(TicketStatus::Cancelled.to_string(), "Cancelled");
+        assert_eq!(TicketStatus::OnHold.to_string(), "On Hold");
+    }
+}
