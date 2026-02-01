@@ -27,4 +27,6 @@ url = "2.5.8"
 tokio = { version = "1.49.0", features = ["full"] }
 dotenv = "0.15.0"
 
-
+[package.metadata.release]
+tag-message = "Release {{version}}"
+pre-release-commit-message = "chore: release {{version}}"
