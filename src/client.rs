@@ -157,8 +157,10 @@ impl ServiceDesk {
         &self,
         ticket_id: impl Into<TicketID>,
     ) -> Result<DetailedTicket, Error> {
+        let ticket_id = ticket_id.into();
+        tracing::info!(ticket_id = %ticket_id, "fetching ticket details");
         let resp: DetailedTicketResponse = self
-            .request(Method::GET, "/api/v3/requests/", &ticket_id.into())
+            .request(Method::GET, "/api/v3/requests/", &ticket_id)
             .await?;
         Ok(resp.request)
     }
@@ -172,10 +174,12 @@ impl ServiceDesk {
         ticket_id: impl Into<TicketID>,
         data: &EditTicketData,
     ) -> Result<(), Error> {
+        let ticket_id = ticket_id.into();
+        tracing::info!(ticket_id = %ticket_id, "editing ticket");
         let _: SdpGenericResponse = self
             .request_input_data(
                 Method::PUT,
-                &format!("/api/v3/requests/{}", ticket_id.into()),
+                &format!("/api/v3/requests/{}", ticket_id),
                 &EditTicketRequest { request: data },
             )
             .await?;
@@ -188,10 +192,12 @@ impl ServiceDesk {
         ticket_id: impl Into<TicketID>,
         note: &NoteData,
     ) -> Result<Note, Error> {
+        let ticket_id = ticket_id.into();
+        tracing::info!(ticket_id = %ticket_id, "adding note");
         let resp: NoteResponse = self
             .request_input_data(
                 Method::POST,
-                &format!("/api/v3/requests/{}/notes", ticket_id.into()),
+                &format!("/api/v3/requests/{}/notes", ticket_id),
                 &AddNoteRequest { note },
             )
             .await?;
@@ -204,11 +210,10 @@ impl ServiceDesk {
         ticket_id: impl Into<TicketID>,
         note_id: impl Into<NoteID>,
     ) -> Result<Note, Error> {
-        let url = format!(
-            "/api/v3/requests/{}/notes/{}",
-            ticket_id.into(),
-            note_id.into()
-        );
+        let ticket_id = ticket_id.into();
+        let note_id = note_id.into();
+        tracing::info!(ticket_id = %ticket_id, note_id = %note_id, "fetching note");
+        let url = format!("/api/v3/requests/{}/notes/{}", ticket_id, note_id);
         let resp: NoteResponse = self.request(Method::GET, &url, &"").await?;
         Ok(resp.note)
     }
@@ -220,6 +225,8 @@ impl ServiceDesk {
         row_count: Option<u32>,
         start_index: Option<u32>,
     ) -> Result<Vec<Note>, Error> {
+        let ticket_id = ticket_id.into();
+        tracing::info!(ticket_id = %ticket_id, "listing notes");
         let body = ListNotesRequest {
             list_info: NotesListInfo {
                 row_count: row_count.unwrap_or(100),
@@ -229,11 +236,10 @@ impl ServiceDesk {
         let resp: Value = self
             .request_input_data(
                 Method::GET,
-                &format!("/api/v3/requests/{}/notes", ticket_id.into()),
+                &format!("/api/v3/requests/{}/notes", ticket_id),
                 &body,
             )
             .await?;
-        dbg!(&resp);
         let resp: NotesListResponse = serde_json::from_value(resp)?;
         Ok(resp.notes)
     }
@@ -245,14 +251,13 @@ impl ServiceDesk {
         note_id: impl Into<NoteID>,
         note: &NoteData,
     ) -> Result<Note, Error> {
+        let ticket_id = ticket_id.into();
+        let note_id = note_id.into();
+        tracing::info!(ticket_id = %ticket_id, note_id = %note_id, "editing note");
         let resp: NoteResponse = self
             .request_input_data(
                 Method::PUT,
-                &format!(
-                    "/api/v3/requests/{}/notes/{}",
-                    ticket_id.into(),
-                    note_id.into()
-                ),
+                &format!("/api/v3/requests/{}/notes/{}", ticket_id, note_id),
                 &EditNoteRequest { request_note: note },
             )
             .await?;
@@ -265,14 +270,13 @@ impl ServiceDesk {
         ticket_id: impl Into<TicketID>,
         note_id: impl Into<NoteID>,
     ) -> Result<(), Error> {
+        let ticket_id = ticket_id.into();
+        let note_id = note_id.into();
+        tracing::info!(ticket_id = %ticket_id, note_id = %note_id, "deleting note");
         let _: SdpGenericResponse = self
             .request(
                 Method::DELETE,
-                &format!(
-                    "/api/v3/requests/{}/notes/{}",
-                    ticket_id.into(),
-                    note_id.into()
-                ),
+                &format!("/api/v3/requests/{}/notes/{}", ticket_id, note_id),
                 &"",
             )
             .await?;
@@ -285,10 +289,12 @@ impl ServiceDesk {
         ticket_id: impl Into<TicketID>,
         technician_name: &str,
     ) -> Result<(), Error> {
+        let ticket_id = ticket_id.into();
+        tracing::info!(ticket_id = %ticket_id, technician = %technician_name, "assigning ticket");
         let _: SdpGenericResponse = self
             .request_input_data(
                 Method::PUT,
-                &format!("/api/v3/requests/{}/assign", ticket_id.into()),
+                &format!("/api/v3/requests/{}/assign", ticket_id),
                 &AssignTicketRequest {
                     request: AssignTicketData {
                         technician: NameWrapper::new(technician_name),
@@ -301,6 +307,7 @@ impl ServiceDesk {
 
     /// Create a new ticket.
     pub async fn create_ticket(&self, data: &CreateTicketData) -> Result<TicketResponse, Error> {
+        tracing::info!(subject = %data.subject, "creating ticket");
         let resp = self
             .request_input_data(
                 Method::POST,
@@ -317,6 +324,7 @@ impl ServiceDesk {
     /// on the 'root' level contains a single condition, to combine multiple conditions
     /// use the 'children' field with appropriate 'logical_operator'.
     pub async fn search_tickets(&self, criteria: Criteria) -> Result<Vec<DetailedTicket>, Error> {
+        tracing::info!("searching tickets");
         let resp = self
             .request_input_data(
                 Method::GET,
@@ -341,10 +349,12 @@ impl ServiceDesk {
         ticket_id: impl Into<TicketID>,
         closure_comments: &str,
     ) -> Result<(), Error> {
+        let ticket_id = ticket_id.into();
+        tracing::info!(ticket_id = %ticket_id, "closing ticket");
         let _: SdpGenericResponse = self
             .request_json(
                 Method::PUT,
-                &format!("/api/v3/requests/{}/close", ticket_id.into()),
+                &format!("/api/v3/requests/{}/close", ticket_id),
                 &CloseTicketRequest {
                     request: CloseTicketData {
                         closure_info: ClosureInfo {
@@ -362,7 +372,9 @@ impl ServiceDesk {
     /// Key point to note is that the maximum number of tickets that can be merged at once is 49 +
     /// 1 (the target ticket), so the `merge_ids` slice must not exceed 49 IDs.
     pub async fn merge(&self, ticket_id: usize, merge_ids: &[usize]) -> Result<(), Error> {
+        tracing::info!(ticket_id = %ticket_id, count = merge_ids.len(), "merging tickets");
         if merge_ids.len() > 49 {
+            tracing::warn!("attempted to merge more than 49 tickets");
             return Err(Error::from_sdp(
                 400,
                 "Cannot merge more than 49 tickets at once".to_string(),
