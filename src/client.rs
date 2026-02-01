@@ -1,5 +1,6 @@
 use reqwest::Method;
 use serde::{Serialize, de::DeserializeOwned};
+use serde_aux::field_attributes::deserialize_number_from_string;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct InnerResponseMessage {
@@ -56,10 +57,12 @@ impl ServiceDesk {
         let response = self.inner.execute(request_builder.build()?).await?;
         if response.error_for_status_ref().is_err() {
             let error = response.json::<SdpGenericResponse>().await?;
+            tracing::error!(error = ?error, "SDP Error Response");
             return Err(error.response_status.into_error());
         }
 
         let parsed = response.json::<R>().await?;
+        tracing::debug!("completed sdp request");
         Ok(parsed)
     }
 
@@ -83,10 +86,12 @@ impl ServiceDesk {
         let response = self.inner.execute(request_builder.build()?).await?;
         if response.error_for_status_ref().is_err() {
             let error = response.json::<SdpGenericResponse>().await?;
+            tracing::error!(error = ?error, "SDP Error Response");
             return Err(error.response_status.into_error());
         }
 
         let parsed = response.json::<R>().await?;
+        tracing::debug!("completed sdp request");
         Ok(parsed)
     }
 
@@ -111,10 +116,12 @@ impl ServiceDesk {
         let response = self.inner.execute(request_builder.build()?).await?;
         if response.error_for_status_ref().is_err() {
             let error = response.json::<SdpGenericResponse>().await?;
+            tracing::error!(error = ?error, "SDP Error Response");
             return Err(error.response_status.into_error());
         }
-
-        Ok(response.json::<R>().await?)
+        let result = response.json::<R>().await?;
+        tracing::debug!("completed sdp request");
+        Ok(result)
     }
 
     async fn request<T, R>(
@@ -136,14 +143,13 @@ impl ServiceDesk {
         let response = self.inner.execute(request_builder.build()?).await?;
         if response.error_for_status_ref().is_err() {
             let error = response.json::<SdpGenericResponse>().await?;
-            //TODO: handle auth error as special case
+            tracing::error!(error = ?error, "SDP Error Response");
             return Err(error.response_status.into_error());
         }
 
         let value = serde_json::to_string(&response.json::<Value>().await?)?;
-        dbg!(&value);
         let response: R = serde_json::from_str(&value)?;
-
+        tracing::debug!("completed sdp request");
         Ok(response)
     }
 
@@ -772,7 +778,8 @@ pub struct TicketResponse {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TicketData {
-    pub id: String,
+    #[serde(deserialize_with = "deserialize_number_from_string")]
+    pub id: u64,
     pub subject: String,
     pub description: String,
     pub status: Status,

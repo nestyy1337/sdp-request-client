@@ -1,5 +1,5 @@
 [package]
-name = "sdp-request-client"
+name = "sdp_request_client"
 version = "0.1.0"
 edition = "2024"
 license = "MIT"
@@ -8,7 +8,12 @@ repository = "https://github.com/nestyy1337/sdp-request-client"
 keywords = ["sdp", "api", "client"]
 categories = ["api-clients"]
 
+[lib]
+name = "sdp_request_client"
+path = "src/lib.rs"
+
 [dependencies]
+serde-aux = "4.7.0"
 chrono = "0.4.43"
 reqwest = { version = "0.13.1", features = ["json", "query", "form"] }
 serde = { version = "1.0.228", features = ["derive"] }
