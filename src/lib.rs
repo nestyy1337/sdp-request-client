@@ -51,9 +51,9 @@ pub use builders::{
     TicketsClient,
 };
 pub use client::{
-    Attachment, Condition, CreateTicketData, Criteria, DetailedTicket, EditTicketData, LogicalOp,
-    NameWrapper, Note, NoteData, NoteResponse, Priority, Resolution, SizeInfo, Status, TicketData,
-    TicketResponse, TimeEntry, UserInfo,
+    Account, Attachment, Condition, CreateTicketData, Criteria, DetailedTicket, EditTicketData,
+    LogicalOp, NameWrapper, Note, NoteData, NoteResponse, Priority, Resolution, ResponseStatus,
+    SizeInfo, Status, TemplateInfo, TicketData, TicketResponse, TimeEntry, UserInfo,
 };
 pub use error::{Error, SdpErrorCode};
 
