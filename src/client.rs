@@ -574,7 +574,7 @@ pub struct UserInfo {
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Resolution {
-    pub content: String,
+    pub content: Option<String>,
     pub submitted_by: Option<UserInfo>,
     pub submitted_on: Option<TimeEntry>,
     pub resolution_attachments: Option<Vec<Attachment>>,
