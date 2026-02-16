@@ -279,6 +279,26 @@ impl ServiceDesk {
         Ok(links)
     }
 
+    pub async fn download_attachment(&self, attachment_url: &str) -> Result<Vec<u8>, Error> {
+        tracing::info!(attachment_url = %attachment_url, "downloading attachment");
+        let url = self.base_url.join(attachment_url)?;
+        let response = self.inner.get(url).send().await?;
+        if response.error_for_status_ref().is_err() {
+            let error = response.json::<SdpGenericResponse>().await.map_err(|e| {
+                tracing::error!(error = ?e, "Failed to parse SDP error response");
+                Error::from_sdp(
+                    500,
+                    "Failed to parse SDP error response".to_string(),
+                    Some(e.to_string()),
+                )
+            })?;
+            tracing::error!(error = ?error, "SDP Error Response");
+            return Err(error.response_status.into_error());
+        }
+        let bytes = response.bytes().await?;
+        Ok(bytes.to_vec())
+    }
+
     /// Edit an existing ticket.
     /// Some of the fields are optional and can be left as None if not being changed.
     /// Some fields might be missing due to SDP API restrictions, like account assignment
