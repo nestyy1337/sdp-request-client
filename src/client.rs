@@ -617,6 +617,7 @@ pub struct DetailedTicket {
     pub completed_time: Option<TimeEntry>,
 
     pub udf_fields: Option<Value>,
+    pub attachments: Vec<Attachment>,
 
     pub closure_info: Option<Value>,
     pub site: Option<Value>,

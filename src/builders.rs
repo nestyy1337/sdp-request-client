@@ -105,8 +105,23 @@ impl<'a> TicketClient<'a> {
         self.client.get_conversation_content(content_url).await
     }
 
-    pub async fn attachment_links(self) -> Result<Vec<String>, Error> {
-        self.client.get_conversation_attachment_urls(self.id).await
+    /// Get all attachment links for the ticket, including conversation attachments
+    /// including attachments from merged tickets.
+    pub async fn all_attachment_links(self) -> Result<Vec<String>, Error> {
+        let ticket = self.client.ticket(self.id.clone()).get().await?;
+        let mut links = Vec::new();
+        for attachment in ticket.attachments {
+            links.push(format!(
+                "{}{}",
+                self.client.base_url, attachment.content_url
+            ));
+        }
+        if let Ok(attachments) = self.client.get_conversation_attachment_urls(self.id).await {
+            for url in attachments {
+                links.push(format!("{}{}", self.client.base_url, url));
+            }
+        }
+        Ok(links)
     }
 
     /// Add a note to the ticket with default settings.

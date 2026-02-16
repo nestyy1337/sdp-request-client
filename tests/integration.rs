@@ -23,13 +23,21 @@ fn setup() -> ServiceDesk {
 }
 
 #[tokio::test]
-#[ignore]
 async fn ticket_get() {
     let sdp = setup();
-    let result = sdp.ticket(65997).get().await;
+    let result = sdp.ticket(305892).get().await;
+    dbg!(&result);
     assert!(result.is_ok());
     let ticket = result.unwrap();
-    assert_eq!(ticket.id, "65997");
+    assert_eq!(ticket.id, "285015");
+}
+
+#[tokio::test]
+async fn ticket_conversations() {
+    let sdp = setup();
+    let result = sdp.ticket(305892).all_attachment_links().await;
+    dbg!(&result);
+    assert!(result.is_ok());
 }
 
 #[tokio::test]
