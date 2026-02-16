@@ -653,6 +653,7 @@ struct EditTicketRequest<'a> {
 #[derive(Serialize, Debug)]
 pub struct EditTicketData {
     pub subject: String,
+    pub status: Status,
     pub description: Option<String>,
     pub requester: Option<NameWrapper>,
     pub priority: Option<NameWrapper>,
@@ -667,6 +668,7 @@ impl From<DetailedTicket> for EditTicketData {
             .map(|p| NameWrapper::new(p.name.clone()));
         Self {
             subject: value.subject,
+            status: value.status,
             description: Some(value.description.unwrap_or_default()),
             requester: Some(NameWrapper::new(value.requester.unwrap_or_default().name)),
             priority: priority,
