@@ -97,6 +97,18 @@ impl<'a> TicketClient<'a> {
         self.client.assign_ticket(self.id, technician).await
     }
 
+    pub async fn conversations(self) -> Result<Value, Error> {
+        self.client.get_conversations(self.id).await
+    }
+
+    pub async fn conversation_content(self, content_url: &str) -> Result<Value, Error> {
+        self.client.get_conversation_content(content_url).await
+    }
+
+    pub async fn attachment_links(self) -> Result<Vec<String>, Error> {
+        self.client.get_conversation_attachment_urls(self.id).await
+    }
+
     /// Add a note to the ticket with default settings.
     pub async fn add_note(self, description: &str) -> Result<Note, Error> {
         self.client

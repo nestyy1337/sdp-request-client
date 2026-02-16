@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use reqwest::Method;
 use serde::{Serialize, de::DeserializeOwned};
 use serde_aux::field_attributes::deserialize_number_from_string;
@@ -142,12 +144,54 @@ impl ServiceDesk {
         let request_builder = self.inner.request(method, url);
         let response = self.inner.execute(request_builder.build()?).await?;
         if response.error_for_status_ref().is_err() {
-            let error = response.json::<SdpGenericResponse>().await?;
+            let error = response.json::<SdpGenericResponse>().await.map_err(|e| {
+                tracing::error!(error = ?e, "Failed to parse SDP error response");
+                Error::from_sdp(
+                    500,
+                    "Failed to parse SDP error response".to_string(),
+                    Some(e.to_string()),
+                )
+            })?;
+            tracing::error!(error = ?error, "SDP Error Response");
+            return Err(error.response_status.into_error());
+        }
+
+        let response = response.json::<R>().await.map_err(|e| {
+            tracing::error!(error = ?e, "Failed to parse SDP response");
+            Error::from_sdp(
+                500,
+                "Failed to parse SDP response".to_string(),
+                Some(e.to_string()),
+            )
+        })?;
+
+        tracing::debug!("completed sdp request");
+        Ok(response)
+    }
+
+    async fn request_with_path<R>(&self, method: Method, path: &str) -> Result<R, Error>
+    where
+        R: DeserializeOwned,
+    {
+        let url = self.base_url.join(path)?;
+
+        let request_builder = self.inner.request(method, url);
+        let response = self.inner.execute(request_builder.build()?).await?;
+        if response.error_for_status_ref().is_err() {
+            let error = response.json::<SdpGenericResponse>().await.map_err(|e| {
+                tracing::error!(error = ?e, "Failed to parse SDP error response");
+                Error::from_sdp(
+                    500,
+                    "Failed to parse SDP error response".to_string(),
+                    Some(e.to_string()),
+                )
+            })?;
             tracing::error!(error = ?error, "SDP Error Response");
             return Err(error.response_status.into_error());
         }
 
         let value = serde_json::to_string(&response.json::<Value>().await?)?;
+        println!("Raw response value: {:#?}", value);
         let response: R = serde_json::from_str(&value)?;
         tracing::debug!("completed sdp request");
         Ok(response)
@@ -163,6 +207,76 @@ impl ServiceDesk {
             .request(Method::GET, "/api/v3/requests/", &ticket_id)
             .await?;
         Ok(resp.request)
+    }
+
+    pub async fn get_conversations(&self, ticket_id: impl Into<TicketID>) -> Result<Value, Error> {
+        let ticket_id = ticket_id.into();
+        tracing::info!(ticket_id = %ticket_id, "fetching ticket details");
+        let path = format!("/api/v3/requests/{}/conversations", &ticket_id);
+        let resp: Value = self.request_with_path(Method::GET, &path).await?;
+        Ok(resp)
+    }
+
+    async fn get_conversations_typed(
+        &self,
+        ticket_id: impl Into<TicketID>,
+    ) -> Result<ConversationsResponse, Error> {
+        let ticket_id = ticket_id.into();
+        tracing::info!(ticket_id = %ticket_id, "fetching ticket conversations");
+        let path = format!("/api/v3/requests/{}/conversations", &ticket_id);
+        self.request_with_path(Method::GET, &path).await
+    }
+
+    pub async fn get_conversation_content(&self, content_url: &str) -> Result<Value, Error> {
+        tracing::info!(content_url = %content_url, "fetching conversation content");
+        let resp: Value = self.request_with_path(Method::GET, content_url).await?;
+        Ok(resp)
+    }
+
+    async fn get_conversation_attachments(
+        &self,
+        content_url: &str,
+    ) -> Result<Vec<Attachment>, Error> {
+        tracing::info!(content_url = %content_url, "fetching conversation attachments");
+        let resp: Value = self.request_with_path(Method::GET, content_url).await?;
+        let attachment: Vec<Attachment> = serde_json::from_value(
+            resp.get("notification")
+                .unwrap_or_default()
+                .get("attachments")
+                .cloned()
+                .unwrap_or_default(),
+        )?;
+        Ok(attachment)
+    }
+
+    pub async fn get_conversation_attachment_urls(
+        &self,
+        ticket_id: impl Into<TicketID>,
+    ) -> Result<Vec<String>, Error> {
+        let conversations = self.get_conversations_typed(ticket_id).await?;
+        let mut links = HashSet::new();
+
+        for conversation in conversations.conversations {
+            if !conversation.has_attachments {
+                continue;
+            }
+
+            let Some(content_url) = conversation.content_url.as_deref() else {
+                continue;
+            };
+
+            let attachments = self.get_conversation_attachments(content_url).await?;
+            for attachment in attachments {
+                links.insert(normalize_attachment_url(
+                    &self.base_url,
+                    &attachment.content_url,
+                )?);
+            }
+        }
+
+        let mut links: Vec<String> = links.into_iter().collect();
+        links.sort();
+        Ok(links)
     }
 
     /// Edit an existing ticket.
@@ -491,7 +605,7 @@ pub struct DetailedTicket {
     pub subject: String,
     pub description: Option<String>,
     pub status: Status,
-    pub priority: Priority,
+    pub priority: Option<Priority>,
     pub requester: Option<UserInfo>,
     pub technician: Option<UserInfo>,
     #[serde(skip_serializing)]
@@ -526,11 +640,15 @@ pub struct EditTicketData {
 
 impl From<DetailedTicket> for EditTicketData {
     fn from(value: DetailedTicket) -> Self {
+        let priority = value
+            .priority
+            .as_ref()
+            .map(|p| NameWrapper::new(p.name.clone()));
         Self {
             subject: value.subject,
             description: Some(value.description.unwrap_or_default()),
             requester: Some(NameWrapper::new(value.requester.unwrap_or_default().name)),
-            priority: Some(value.priority.name.into()),
+            priority: priority,
             udf_fields: value.udf_fields,
         }
     }
@@ -754,6 +872,24 @@ struct EditNoteRequest<'a> {
 #[derive(Serialize, Debug)]
 struct ListNotesRequest {
     list_info: NotesListInfo,
+}
+
+#[derive(Debug, Deserialize)]
+struct ConversationsResponse {
+    #[serde(default)]
+    conversations: Vec<ConversationSummary>,
+}
+
+#[derive(Debug, Deserialize)]
+struct ConversationSummary {
+    #[serde(default)]
+    has_attachments: bool,
+    #[serde(default)]
+    content_url: Option<String>,
+}
+
+fn normalize_attachment_url(base_url: &reqwest::Url, value: &str) -> Result<String, Error> {
+    Ok(base_url.join(value)?.to_string())
 }
 
 #[derive(Serialize, Debug)]
