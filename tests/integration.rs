@@ -5,7 +5,7 @@
 
 use reqwest::Url;
 use sdp_request_client::{
-    Credentials, EditTicketData, NameWrapper, ServiceDesk, ServiceDeskOptions,
+    Credentials, EditTicketData, NameWrapper, ServiceDesk, ServiceDeskOptions, Status,
 };
 
 fn setup() -> ServiceDesk {
@@ -125,11 +125,15 @@ async fn assign_ticket() {
 }
 
 #[tokio::test]
-#[ignore]
 async fn edit_ticket() {
     let sdp = setup();
     let editdata = EditTicketData {
         subject: "Updated via builder".to_string(),
+        status: Status {
+            id: 2.to_string(),
+            name: "Open".to_string(),
+            color: Some("#0066ff".to_string()),
+        },
         description: None,
         requester: Some(NameWrapper {
             name: "GALLUP".to_string(),
@@ -165,6 +169,13 @@ async fn get_note() {
     assert!(result.is_ok());
     let note = result.unwrap();
     assert_eq!(note.description, "<div>test note<br></div>");
+}
+
+#[tokio::test]
+async fn test_merge() {
+    let sdp = setup();
+    let result = sdp.ticket(308353).merge(&vec![308345]).await;
+    assert!(result.is_ok());
 }
 
 #[tokio::test]

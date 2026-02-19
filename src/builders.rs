@@ -152,8 +152,7 @@ impl<'a> TicketClient<'a> {
 
     /// Merge other tickets into this one.
     pub async fn merge(self, ticket_ids: &[u64]) -> Result<(), Error> {
-        let ids: Vec<usize> = ticket_ids.iter().map(|id| *id as usize).collect();
-        self.client.merge(self.id.0 as usize, &ids).await
+        self.client.merge(self.id.0, &ticket_ids).await
     }
 
     /// Edit ticket fields.

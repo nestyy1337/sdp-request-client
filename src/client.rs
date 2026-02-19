@@ -505,7 +505,7 @@ impl ServiceDesk {
     /// Merge multiple tickets into a single ticket.
     /// Key point to note is that the maximum number of tickets that can be merged at once is 49 +
     /// 1 (the target ticket), so the `merge_ids` slice must not exceed 49 IDs.
-    pub async fn merge(&self, ticket_id: usize, merge_ids: &[usize]) -> Result<(), Error> {
+    pub async fn merge(&self, ticket_id: u64, merge_ids: &[u64]) -> Result<(), Error> {
         tracing::info!(ticket_id = %ticket_id, count = merge_ids.len(), "merging tickets");
         if merge_ids.len() > 49 {
             tracing::warn!("attempted to merge more than 49 tickets");
