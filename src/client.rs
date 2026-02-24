@@ -4,7 +4,7 @@ use reqwest::Method;
 use serde::{Serialize, de::DeserializeOwned};
 use serde_aux::field_attributes::deserialize_number_from_string;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct InnerResponseMessage {
     status_code: u32,
     #[serde(rename = "type")]
@@ -16,7 +16,7 @@ pub struct InnerResponseMessage {
 /// Used to parse error responses from the SDP API since SDP uses a non-standard error response format
 /// including weird status codes. Partially they are converted to proper HTTP status codes by Error
 /// conversion.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SdpResponseStatus {
     pub status_code: u32,
     pub messages: Option<Vec<InnerResponseMessage>>,
@@ -37,7 +37,7 @@ impl SdpResponseStatus {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
 struct SdpGenericResponse {
     response_status: SdpResponseStatus,
 }
@@ -536,12 +536,12 @@ use serde_json::Value;
 
 use crate::{NoteID, ServiceDesk, TicketID, UserID, error::Error};
 
-#[derive(Deserialize, Serialize, Debug, Clone)]
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
 pub(crate) struct SearchRequest {
     pub(crate) list_info: ListInfo,
 }
 
-#[derive(Deserialize, Serialize, Debug, Clone)]
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
 pub struct ListInfo {
     pub row_count: u32,
     pub search_criteria: Criteria,
@@ -551,7 +551,7 @@ pub struct ListInfo {
 /// This structure allows for complex nested criteria using logical operators.
 /// The inner field, condition, and value define a single search condition.
 /// The children field allows for nesting additional criteria, combined using the specified logical operator.
-#[derive(Deserialize, Serialize, Debug, Clone)]
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
 pub struct Criteria {
     pub field: String,
     pub condition: Condition,
@@ -578,7 +578,7 @@ impl Default for Criteria {
 
 /// Condition enum for specifying search conditions in criteria.
 /// Used in the Criteria struct to define how to compare field values.
-#[derive(Deserialize, Serialize, Debug, Clone)]
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum Condition {
     #[serde(rename = "is")]
@@ -592,7 +592,7 @@ pub enum Condition {
 }
 
 /// Logical operators for combining multiple criteria.
-#[derive(Deserialize, Serialize, Debug, Clone)]
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq)]
 pub enum LogicalOp {
     #[serde(rename = "AND")]
     And,
@@ -600,12 +600,12 @@ pub enum LogicalOp {
     Or,
 }
 
-#[derive(Deserialize, Serialize, Debug)]
+#[derive(Deserialize, Serialize, Debug, PartialEq)]
 pub struct TicketSearchResponse {
     pub requests: Vec<DetailedTicket>,
 }
 
-#[derive(Deserialize, Serialize, Debug, Clone)]
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq)]
 pub struct Account {
     pub id: String,
     pub name: String,
@@ -650,7 +650,7 @@ struct EditTicketRequest<'a> {
     request: &'a EditTicketData,
 }
 
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Debug, PartialEq)]
 pub struct EditTicketData {
     pub subject: String,
     pub status: Status,
@@ -677,20 +677,20 @@ impl From<DetailedTicket> for EditTicketData {
     }
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ResponseStatus {
     pub status: String,
     pub status_code: i64,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Status {
     pub id: String,
     pub name: String,
     pub color: Option<String>,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Priority {
     pub id: String,
     pub name: String,
@@ -734,13 +734,13 @@ pub struct Attachment {
     pub attached_on: Option<TimeEntry>,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SizeInfo {
     pub display_value: String,
     pub value: u64,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TimeEntry {
     pub display_value: String,
     pub value: String,
@@ -751,7 +751,7 @@ struct CreateTicketRequest<'a> {
     request: &'a CreateTicketData,
 }
 
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Debug, PartialEq)]
 pub struct CreateTicketData {
     pub subject: String,
     pub description: String,
@@ -779,7 +779,7 @@ impl Default for CreateTicketData {
     }
 }
 
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Debug, PartialEq, Eq)]
 pub struct NameWrapper {
     pub name: String,
 }
@@ -816,17 +816,17 @@ impl std::ops::DerefMut for NameWrapper {
     }
 }
 
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Debug, PartialEq, Eq)]
 struct CloseTicketRequest {
     request: CloseTicketData,
 }
 
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Debug, PartialEq, Eq)]
 struct CloseTicketData {
     closure_info: ClosureInfo,
 }
 
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Debug, PartialEq, Eq)]
 struct ClosureInfo {
     closure_comments: String,
     closure_code: String,
@@ -837,7 +837,7 @@ struct AddNoteRequest<'a> {
     note: &'a NoteData,
 }
 
-#[derive(Serialize, Debug, Default)]
+#[derive(Serialize, Debug, Default, PartialEq, Eq)]
 pub struct NoteData {
     pub mark_first_response: bool,
     pub add_to_linked_requests: bool,
@@ -847,19 +847,19 @@ pub struct NoteData {
 }
 
 // Note response structures
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct NoteResponse {
     pub note: Note,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct NotesListResponse {
     pub list_info: Option<ListInfoResponse>,
     pub notes: Vec<Note>,
     pub response_status: Vec<ResponseStatus>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ListInfoResponse {
     pub has_more_rows: bool,
     pub page: u32,
@@ -869,7 +869,7 @@ pub struct ListInfoResponse {
     pub start_index: u32,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Note {
     pub id: String,
     #[serde(default)]
@@ -897,13 +897,13 @@ struct ListNotesRequest {
     list_info: NotesListInfo,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Deserialize)]
 struct ConversationsResponse {
     #[serde(default)]
     conversations: Vec<ConversationSummary>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Deserialize)]
 struct ConversationSummary {
     #[serde(default)]
     has_attachments: bool,
@@ -915,39 +915,39 @@ fn normalize_attachment_url(base_url: &reqwest::Url, value: &str) -> Result<Stri
     Ok(base_url.join(value)?.to_string())
 }
 
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Debug, PartialEq, Eq)]
 struct NotesListInfo {
     row_count: u32,
     start_index: u32,
 }
 
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Debug, PartialEq, Eq)]
 struct AssignTicketRequest {
     request: AssignTicketData,
 }
 
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Debug, PartialEq, Eq)]
 struct AssignTicketData {
     technician: NameWrapper,
 }
 
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Debug, PartialEq, Eq)]
 struct MergeTicketsRequest {
     merge_requests: Vec<MergeRequestId>,
 }
 
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Debug, PartialEq, Eq)]
 struct MergeRequestId {
     id: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TicketResponse {
     pub request: TicketData,
     pub response_status: ResponseStatus,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TicketData {
     #[serde(deserialize_with = "deserialize_number_from_string")]
     pub id: u64,
@@ -962,7 +962,7 @@ pub struct TicketData {
     pub udf_fields: Option<Value>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TemplateInfo {
     pub id: String,
     pub name: String,

@@ -187,7 +187,7 @@ pub struct TicketSearchBuilder<'a> {
 }
 
 /// Ticket status filter values.
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum TicketStatus {
     Open,
     Closed,

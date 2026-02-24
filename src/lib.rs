@@ -62,11 +62,11 @@ pub use error::{Error, SdpErrorCode};
 pub struct UserID(pub String);
 
 /// Type-safe wrapper for Ticket ID in SDP
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct TicketID(pub u64);
 
 /// Type-safe wrapper for Note ID in SDP
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct NoteID(pub u64);
 
 impl From<u64> for NoteID {
@@ -160,7 +160,7 @@ pub struct ServiceDesk {
 
 /// Security options for the ServiceDesk client
 /// Not finished yet!!
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Security {
     Unsafe,
     NativeTlS,
