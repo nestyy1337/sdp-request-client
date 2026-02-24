@@ -5,7 +5,8 @@
 
 use reqwest::Url;
 use sdp_request_client::{
-    Credentials, EditTicketData, NoteID, ServiceDesk, ServiceDeskOptions, Status, TicketID,
+    Credentials, EditTicketData, NoteID, Priority, ServiceDesk, ServiceDeskOptions, Status,
+    TicketID, UserID, UserInfo,
 };
 
 fn setup() -> ServiceDesk {
@@ -136,8 +137,8 @@ async fn edit_ticket() {
             color: Some("#0066ff".to_string()),
         },
         description: None,
-        requester: Some("GALLUP".to_string()),
-        priority: Some("High".to_string()),
+        requester: None,
+        priority: Some(Priority::low()),
         udf_fields: None,
     };
 

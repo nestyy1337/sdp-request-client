@@ -665,29 +665,20 @@ pub struct EditTicketData {
     pub subject: String,
     pub status: Status,
     pub description: Option<String>,
-    #[serde(
-        serialize_with = "serialize_optional_name_object",
-        deserialize_with = "deserialize_optional_name_object"
-    )]
-    pub requester: Option<String>,
-    #[serde(
-        serialize_with = "serialize_optional_name_object",
-        deserialize_with = "deserialize_optional_name_object"
-    )]
-    pub priority: Option<String>,
+    pub requester: Option<UserInfo>,
+    pub priority: Option<Priority>,
     /// Dynamically defined template fields
     pub udf_fields: Option<Value>,
 }
 
 impl From<DetailedTicket> for EditTicketData {
     fn from(value: DetailedTicket) -> Self {
-        let priority = value.priority.as_ref().map(|p| p.name.clone());
         Self {
             subject: value.subject,
             status: value.status,
-            description: Some(value.description.unwrap_or_default()),
-            requester: Some(value.requester.unwrap_or_default().name),
-            priority,
+            description: value.description,
+            requester: value.requester,
+            priority: value.priority,
             udf_fields: value.udf_fields,
         }
     }
@@ -1259,8 +1250,8 @@ mod tests {
                 color: None,
             },
             description: None,
-            requester: Some("NETXP".to_string()),
-            priority: Some("High".to_string()),
+            requester: None,
+            priority: Some(Priority::high()),
             udf_fields: None,
         };
 
