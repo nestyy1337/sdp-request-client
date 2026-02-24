@@ -5,7 +5,7 @@
 
 use reqwest::Url;
 use sdp_request_client::{
-    Credentials, EditTicketData, NameWrapper, ServiceDesk, ServiceDeskOptions, Status,
+    Credentials, EditTicketData, NoteID, ServiceDesk, ServiceDeskOptions, Status, TicketID,
 };
 
 fn setup() -> ServiceDesk {
@@ -20,16 +20,17 @@ fn setup() -> ServiceDesk {
         creds,
         ServiceDeskOptions::default(),
     )
+    .expect("failed to build ServiceDesk client")
 }
 
 #[tokio::test]
 async fn ticket_get() {
     let sdp = setup();
-    let result = sdp.ticket(305892).get().await;
+    let result = sdp.ticket(327847).get().await;
     dbg!(&result);
     assert!(result.is_ok());
     let ticket = result.unwrap();
-    assert_eq!(ticket.id, "285015");
+    assert_eq!(ticket.id, TicketID(285015));
 }
 
 #[tokio::test]
@@ -135,12 +136,8 @@ async fn edit_ticket() {
             color: Some("#0066ff".to_string()),
         },
         description: None,
-        requester: Some(NameWrapper {
-            name: "GALLUP".to_string(),
-        }),
-        priority: Some(NameWrapper {
-            name: "High".to_string(),
-        }),
+        requester: Some("GALLUP".to_string()),
+        priority: Some("High".to_string()),
         udf_fields: None,
     };
 
@@ -155,10 +152,7 @@ async fn list_notes() {
     let result = sdp.list_notes(250225, None, None).await;
     assert!(result.is_ok());
     let notes = result.unwrap();
-    assert_eq!(
-        (notes[0].id.clone(), notes[1].id.clone()),
-        ("279486".to_string(), "279666".to_string())
-    )
+    assert_eq!((notes[0].id, notes[1].id), (NoteID(279486), NoteID(279666)))
 }
 
 #[tokio::test]
@@ -174,7 +168,7 @@ async fn get_note() {
 #[tokio::test]
 async fn test_merge() {
     let sdp = setup();
-    let result = sdp.ticket(308353).merge(&vec![308345]).await;
+    let result = sdp.ticket(308353).merge(&[TicketID(308345)]).await;
     assert!(result.is_ok());
 }
 
@@ -191,8 +185,6 @@ async fn create_delete_note() {
     assert!(create_result.is_ok());
     let created_note = create_result.unwrap();
 
-    let delete_result = sdp
-        .delete_note(250225, created_note.id.parse::<u64>().unwrap())
-        .await;
+    let delete_result = sdp.delete_note(250225, created_note.id).await;
     assert!(delete_result.is_ok());
 }

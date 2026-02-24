@@ -2,7 +2,7 @@ use thiserror::Error;
 
 /// SDP API error codes
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SdpErrorCode {
+pub(crate) enum SdpErrorCode {
     Success = 2000,
     InvalidValue = 4001,
     Forbidden = 4002,

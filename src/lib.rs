@@ -11,7 +11,7 @@
 //!     Url::parse("https://sdp.example.com")?,
 //!     Credentials::Token { token: "your-token".into() },
 //!     ServiceDeskOptions::default(),
-//! );
+//! )?;
 //!
 //! // Search tickets
 //! let tickets = client.tickets().search().open().limit(10).fetch().await?;
@@ -33,7 +33,8 @@
 //!
 //! See [`ServiceDesk`] for the main entry point.
 
-use chrono::Duration;
+use std::time::Duration;
+
 use reqwest::{
     Url,
     header::{HeaderMap, HeaderName, HeaderValue},
@@ -52,22 +53,67 @@ pub use builders::{
 };
 pub use client::{
     Account, Attachment, Condition, CreateTicketData, Criteria, DetailedTicket, EditTicketData,
-    LogicalOp, NameWrapper, Note, NoteData, NoteResponse, Priority, Resolution, ResponseStatus,
-    SizeInfo, Status, TemplateInfo, TicketData, TicketResponse, TimeEntry, UserInfo,
+    LogicalOp, Note, NoteData, Priority, Resolution, Status, TemplateInfo, TicketData, TimeEntry,
+    UserInfo,
 };
-pub use error::{Error, SdpErrorCode};
+pub use error::Error;
 
 /// Type-safe wrapper for User ID in SDP
 #[derive(Clone, Deserialize, Serialize, Debug, PartialEq, Eq, Hash, Default)]
 pub struct UserID(pub String);
 
 /// Type-safe wrapper for Ticket ID in SDP
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+///
+/// Deserializes from both numbers (`123`) and strings (`"123"`),
+/// since the SDP API returns IDs as strings.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize)]
 pub struct TicketID(pub u64);
 
 /// Type-safe wrapper for Note ID in SDP
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+///
+/// Deserializes from both numbers (`123`) and strings (`"123"`),
+/// since the SDP API returns IDs as strings.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize)]
 pub struct NoteID(pub u64);
+
+/// Visitor that accepts either a number or a string and parses to u64.
+struct StringOrNumberU64Visitor;
+
+impl<'de> serde::de::Visitor<'de> for StringOrNumberU64Visitor {
+    type Value = u64;
+
+    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+        formatter.write_str("a u64 or a string containing a u64")
+    }
+
+    fn visit_u64<E: serde::de::Error>(self, v: u64) -> Result<u64, E> {
+        Ok(v)
+    }
+
+    fn visit_i64<E: serde::de::Error>(self, v: i64) -> Result<u64, E> {
+        u64::try_from(v).map_err(|_| E::custom(format!("negative id: {v}")))
+    }
+
+    fn visit_str<E: serde::de::Error>(self, v: &str) -> Result<u64, E> {
+        v.parse::<u64>().map_err(serde::de::Error::custom)
+    }
+}
+
+impl<'de> Deserialize<'de> for TicketID {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        deserializer
+            .deserialize_any(StringOrNumberU64Visitor)
+            .map(TicketID)
+    }
+}
+
+impl<'de> Deserialize<'de> for NoteID {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        deserializer
+            .deserialize_any(StringOrNumberU64Visitor)
+            .map(NoteID)
+    }
+}
 
 impl From<u64> for NoteID {
     fn from(value: u64) -> Self {
@@ -153,17 +199,17 @@ impl std::fmt::Display for UserID {
 /// or [`ticket(id)`](Self::ticket) for single-ticket operations.
 #[derive(Clone)]
 pub struct ServiceDesk {
-    pub base_url: Url,
-    pub credentials: Credentials,
+    base_url: Url,
     inner: reqwest::Client,
 }
 
 /// Security options for the ServiceDesk client
+///
 /// Not finished yet!!
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Security {
     Unsafe,
-    NativeTlS,
+    NativeTLS,
 }
 
 /// Configuration options for the ServiceDesk client
@@ -185,7 +231,7 @@ impl Default for ServiceDeskOptions {
     fn default() -> Self {
         ServiceDeskOptions {
             user_agent: Some(String::from("servicedesk-rs/0.1.0")),
-            timeout: Some(Duration::seconds(5)),
+            timeout: Some(Duration::from_secs(5)),
             security: Some(Security::Unsafe),
             default_headers: Some(HeaderMap::from_iter(vec![SDP_HEADER.clone()])),
         }
@@ -193,40 +239,44 @@ impl Default for ServiceDeskOptions {
 }
 
 impl ServiceDesk {
-    /// Create a new ServiceDesk client instance
-    pub fn new(base_url: Url, credentials: Credentials, options: ServiceDeskOptions) -> Self {
+    /// Create a new ServiceDesk client instance.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the auth token contains invalid header characters
+    /// or if the underlying HTTP client fails to build.
+    pub fn new(
+        base_url: Url,
+        credentials: Credentials,
+        options: ServiceDeskOptions,
+    ) -> Result<Self, Error> {
         let mut headers = options.default_headers.unwrap_or_default();
 
-        #[allow(clippy::single_match)]
-        match credentials {
-            Credentials::Token { ref token } => {
-                headers.insert("authtoken", HeaderValue::from_str(token).unwrap());
-            }
-            _ => {}
+        if let Credentials::Token { ref token } = credentials {
+            let value = HeaderValue::from_str(token)
+                .map_err(|e| Error::Other(format!("invalid auth token header value: {e}")))?;
+            headers.insert("authtoken", value);
         }
-        let mut inner = reqwest::ClientBuilder::new()
+
+        let mut builder = reqwest::ClientBuilder::new()
             .default_headers(headers)
             .user_agent(options.user_agent.unwrap_or_default())
-            .timeout(options.timeout.unwrap_or_default().to_std().unwrap());
+            .timeout(options.timeout.unwrap_or_else(|| Duration::from_secs(5)));
 
         if let Some(security) = options.security {
             match security {
                 Security::Unsafe => {
-                    inner = inner.danger_accept_invalid_certs(true);
+                    builder = builder.danger_accept_invalid_certs(true);
                 }
-                Security::NativeTlS => {
-                    // Default behavior, do nothing
-                }
+                Security::NativeTLS => {}
             }
-        };
-
-        let inner = inner.build().expect("failed to build sdp client");
-
-        ServiceDesk {
-            base_url,
-            credentials,
-            inner,
         }
+
+        let inner = builder
+            .build()
+            .map_err(|e| Error::Other(format!("failed to build HTTP client: {e}")))?;
+
+        Ok(ServiceDesk { base_url, inner })
     }
 }
 
@@ -238,7 +288,7 @@ mod tests {
     fn service_desk_options_default() {
         let opts = ServiceDeskOptions::default();
         assert_eq!(opts.user_agent, Some("servicedesk-rs/0.1.0".to_string()));
-        assert_eq!(opts.timeout, Some(Duration::seconds(5)));
+        assert_eq!(opts.timeout, Some(Duration::from_secs(5)));
         assert!(matches!(opts.security, Some(Security::Unsafe)));
         assert!(opts.default_headers.is_some());
     }

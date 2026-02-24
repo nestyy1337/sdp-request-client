@@ -5,7 +5,7 @@
 //! # use sdp_request_client::{ServiceDesk, ServiceDeskOptions, Credentials};
 //! # use reqwest::Url;
 //! # async fn example() -> Result<(), sdp_request_client::Error> {
-//! # let client = ServiceDesk::new(Url::parse("https://sdp.example.com").unwrap(), Credentials::Token { token: "".into() }, ServiceDeskOptions::default());
+//! # let client = ServiceDesk::new(Url::parse("https://sdp.example.com").unwrap(), Credentials::Token { token: "".into() }, ServiceDeskOptions::default()).unwrap();
 //! // Search for open tickets (default limit: 100)
 //! let tickets = client.tickets()
 //!     .search()
@@ -39,7 +39,7 @@ use crate::{
     ServiceDesk, TicketID,
     client::{
         Condition, CreateTicketData, Criteria, DetailedTicket, EditTicketData, ListInfo, LogicalOp,
-        NameWrapper, Note, NoteData, SearchRequest, TicketResponse, TicketSearchResponse,
+        Note, NoteData, SearchRequest, TicketData, TicketSearchResponse,
     },
     error::Error,
 };
@@ -83,38 +83,40 @@ pub struct TicketClient<'a> {
 
 impl<'a> TicketClient<'a> {
     /// Get full ticket details.
-    pub async fn get(self) -> Result<DetailedTicket, Error> {
+    pub async fn get(&self) -> Result<DetailedTicket, Error> {
         self.client.ticket_details(self.id).await
     }
 
     /// Close the ticket with a comment.
-    pub async fn close(self, comment: &str) -> Result<(), Error> {
+    pub async fn close(&self, comment: &str) -> Result<(), Error> {
         self.client.close_ticket(self.id, comment).await
     }
 
     /// Assign the ticket to a technician.
-    pub async fn assign(self, technician: &str) -> Result<(), Error> {
+    pub async fn assign(&self, technician: &str) -> Result<(), Error> {
         self.client.assign_ticket(self.id, technician).await
     }
 
-    pub async fn conversations(self) -> Result<Value, Error> {
+    pub async fn conversations(&self) -> Result<Value, Error> {
         self.client.get_conversations(self.id).await
     }
 
-    pub async fn conversation_content(self, content_url: &str) -> Result<Value, Error> {
+    pub async fn conversation_content(&self, content_url: &str) -> Result<Value, Error> {
         self.client.get_conversation_content(content_url).await
     }
 
     /// Get all attachment links for the ticket, including conversation attachments
     /// including attachments from merged tickets.
-    pub async fn all_attachment_links(self) -> Result<Vec<String>, Error> {
-        let ticket = self.client.ticket(self.id.clone()).get().await?;
+    pub async fn all_attachment_links(&self) -> Result<Vec<String>, Error> {
+        let ticket = self.client.ticket(self.id).get().await?;
         let mut links = Vec::new();
-        for attachment in ticket.attachments {
-            links.push(format!(
-                "{}{}",
-                self.client.base_url, attachment.content_url
-            ));
+        if let Some(attachments) = ticket.attachments {
+            for attachment in attachments {
+                links.push(format!(
+                    "{}{}",
+                    self.client.base_url, attachment.content_url
+                ));
+            }
         }
         if let Ok(attachments) = self.client.get_conversation_attachment_urls(self.id).await {
             for url in attachments {
@@ -125,7 +127,7 @@ impl<'a> TicketClient<'a> {
     }
 
     /// Add a note to the ticket with default settings.
-    pub async fn add_note(self, description: &str) -> Result<Note, Error> {
+    pub async fn add_note(&self, description: &str) -> Result<Note, Error> {
         self.client
             .add_note(
                 self.id,
@@ -138,7 +140,7 @@ impl<'a> TicketClient<'a> {
     }
 
     /// Start building a note with custom settings.
-    pub fn note(self) -> NoteBuilder<'a> {
+    pub fn note(&self) -> NoteBuilder<'a> {
         NoteBuilder {
             client: self.client,
             ticket_id: self.id,
@@ -151,28 +153,27 @@ impl<'a> TicketClient<'a> {
     }
 
     /// Merge other tickets into this one.
-    pub async fn merge(self, ticket_ids: &[u64]) -> Result<(), Error> {
-        self.client.merge(self.id.0, &ticket_ids).await
+    pub async fn merge(&self, ticket_ids: &[TicketID]) -> Result<(), Error> {
+        self.client.merge(self.id, ticket_ids).await
     }
 
     /// Edit ticket fields.
-    pub async fn edit(self, data: &EditTicketData) -> Result<(), Error> {
+    pub async fn edit(&self, data: &EditTicketData) -> Result<(), Error> {
         self.client.edit(self.id, data).await
     }
 
     /// Close ticket with a note.
-    pub async fn close_with_note(self, comment: &str) -> Result<(), Error> {
-        let id = self.id.clone();
+    pub async fn close_with_note(&self, comment: &str) -> Result<(), Error> {
         self.client
             .add_note(
-                id.clone(),
+                self.id,
                 &NoteData {
                     description: comment.to_string(),
                     ..Default::default()
                 },
             )
             .await?;
-        self.client.close_ticket(id, comment).await
+        self.client.close_ticket(self.id, comment).await
     }
 }
 
@@ -406,7 +407,7 @@ impl<'a> TicketCreateBuilder<'a> {
     }
 
     /// Create the ticket.
-    pub async fn send(self) -> Result<TicketResponse, Error> {
+    pub async fn send(self) -> Result<TicketData, Error> {
         let subject = self
             .subject
             .ok_or_else(|| Error::Other("subject is required".to_string()))?;
@@ -417,10 +418,10 @@ impl<'a> TicketCreateBuilder<'a> {
         let data = CreateTicketData {
             subject,
             description: self.description.unwrap_or_default(),
-            requester: NameWrapper::new(requester),
-            priority: NameWrapper::new(self.priority),
-            account: NameWrapper::new(self.account.unwrap_or_default()),
-            template: NameWrapper::new(self.template.unwrap_or_default()),
+            requester,
+            priority: self.priority,
+            account: self.account.unwrap_or_default(),
+            template: self.template.unwrap_or_default(),
             udf_fields: self.udf_fields.unwrap_or(serde_json::json!({})),
         };
 

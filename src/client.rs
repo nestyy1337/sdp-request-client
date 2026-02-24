@@ -1,8 +1,7 @@
 use std::collections::HashSet;
 
 use reqwest::Method;
-use serde::{Serialize, de::DeserializeOwned};
-use serde_aux::field_attributes::deserialize_number_from_string;
+use serde::{Deserializer, Serialize, Serializer, de::DeserializeOwned, ser::SerializeStruct};
 
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct InnerResponseMessage {
@@ -190,11 +189,9 @@ impl ServiceDesk {
             return Err(error.response_status.into_error());
         }
 
-        let value = serde_json::to_string(&response.json::<Value>().await?)?;
-        println!("Raw response value: {:#?}", value);
-        let response: R = serde_json::from_str(&value)?;
+        let parsed = response.json::<R>().await?;
         tracing::debug!("completed sdp request");
-        Ok(response)
+        Ok(parsed)
     }
 
     pub async fn ticket_details(
@@ -300,9 +297,9 @@ impl ServiceDesk {
     }
 
     /// Edit an existing ticket.
-    /// Some of the fields are optional and can be left as None if not being changed.
-    /// Some fields might be missing due to SDP API restrictions, like account assignment
-    /// to a given ticket being immutable after creation.
+    ///
+    /// # Important
+    /// Read `EditTicketData` documentation for details on how the editing works and how to use it.
     pub async fn edit(
         &self,
         ticket_id: impl Into<TicketID>,
@@ -431,7 +428,7 @@ impl ServiceDesk {
                 &format!("/api/v3/requests/{}/assign", ticket_id),
                 &AssignTicketRequest {
                     request: AssignTicketData {
-                        technician: NameWrapper::new(technician_name),
+                        technician: technician_name.to_string(),
                     },
                 },
             )
@@ -440,23 +437,24 @@ impl ServiceDesk {
     }
 
     /// Create a new ticket.
-    pub async fn create_ticket(&self, data: &CreateTicketData) -> Result<TicketResponse, Error> {
+    pub async fn create_ticket(&self, data: &CreateTicketData) -> Result<TicketData, Error> {
         tracing::info!(subject = %data.subject, "creating ticket");
-        let resp = self
+        let resp: TicketResponse = self
             .request_input_data(
                 Method::POST,
                 "/api/v3/requests",
                 &CreateTicketRequest { request: data },
             )
             .await?;
-        Ok(resp)
+        Ok(resp.request)
     }
 
     /// Search for tickets based on specified criteria.
+    ///
     /// The criteria can be built using the `Criteria` struct.
-    /// The default method of querying is not straightforward, [`Criteria`] struct
-    /// on the 'root' level contains a single condition, to combine multiple conditions
-    /// use the 'children' field with appropriate 'logical_operator'.
+    /// The default method of querying is not straightforward,
+    /// [`Criteria`] struct on the 'root' level contains a single condition, to combine multiple conditions
+    /// use the 'children' field with appropriate `LogicalOp`.
     pub async fn search_tickets(&self, criteria: Criteria) -> Result<Vec<DetailedTicket>, Error> {
         tracing::info!("searching tickets");
         let resp = self
@@ -505,7 +503,12 @@ impl ServiceDesk {
     /// Merge multiple tickets into a single ticket.
     /// Key point to note is that the maximum number of tickets that can be merged at once is 49 +
     /// 1 (the target ticket), so the `merge_ids` slice must not exceed 49 IDs.
-    pub async fn merge(&self, ticket_id: u64, merge_ids: &[u64]) -> Result<(), Error> {
+    pub async fn merge(
+        &self,
+        ticket_id: impl Into<TicketID>,
+        merge_ids: &[TicketID],
+    ) -> Result<(), Error> {
+        let ticket_id = ticket_id.into();
         tracing::info!(ticket_id = %ticket_id, count = merge_ids.len(), "merging tickets");
         if merge_ids.len() > 49 {
             tracing::warn!("attempted to merge more than 49 tickets");
@@ -517,7 +520,9 @@ impl ServiceDesk {
         }
         let merge_requests: Vec<MergeRequestId> = merge_ids
             .iter()
-            .map(|id| MergeRequestId { id: id.to_string() })
+            .map(|id| MergeRequestId {
+                id: id.0.to_string(),
+            })
             .collect();
 
         let _: SdpGenericResponse = self
@@ -611,17 +616,17 @@ pub struct Account {
     pub name: String,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 struct DetailedTicketResponse {
     request: DetailedTicket,
     #[serde(skip_serializing)]
     response_status: ResponseStatus,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename = "request")]
 pub struct DetailedTicket {
-    pub id: String,
+    pub id: TicketID,
     pub subject: String,
     pub description: Option<String>,
     pub status: Status,
@@ -635,10 +640,8 @@ pub struct DetailedTicket {
     pub due_by_time: Option<TimeEntry>,
     pub resolved_time: Option<TimeEntry>,
     pub completed_time: Option<TimeEntry>,
-
     pub udf_fields: Option<Value>,
-    pub attachments: Vec<Attachment>,
-
+    pub attachments: Option<Vec<Attachment>>,
     pub closure_info: Option<Value>,
     pub site: Option<Value>,
     pub department: Option<Value>,
@@ -650,51 +653,215 @@ struct EditTicketRequest<'a> {
     request: &'a EditTicketData,
 }
 
-#[derive(Serialize, Debug, PartialEq)]
+/// Data structure for editing a ticket.
+/// Contains fields that WILL be updated on the associated ticket.
+/// For some reason SDP does not provide simple API to patch a single attribute of a ticket,
+/// instead it requires sending a PUT that will replace all of the fields even None ones,
+/// which will be treated as empty values and overwrite existing data.
+///
+/// To conveniently use this API I'd recommend to use `From<DetailedTicket>` implementation for this struct.
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct EditTicketData {
     pub subject: String,
     pub status: Status,
     pub description: Option<String>,
-    pub requester: Option<NameWrapper>,
-    pub priority: Option<NameWrapper>,
+    #[serde(
+        serialize_with = "serialize_optional_name_object",
+        deserialize_with = "deserialize_optional_name_object"
+    )]
+    pub requester: Option<String>,
+    #[serde(
+        serialize_with = "serialize_optional_name_object",
+        deserialize_with = "deserialize_optional_name_object"
+    )]
+    pub priority: Option<String>,
+    /// Dynamically defined template fields
     pub udf_fields: Option<Value>,
 }
 
 impl From<DetailedTicket> for EditTicketData {
     fn from(value: DetailedTicket) -> Self {
-        let priority = value
-            .priority
-            .as_ref()
-            .map(|p| NameWrapper::new(p.name.clone()));
+        let priority = value.priority.as_ref().map(|p| p.name.clone());
         Self {
             subject: value.subject,
             status: value.status,
             description: Some(value.description.unwrap_or_default()),
-            requester: Some(NameWrapper::new(value.requester.unwrap_or_default().name)),
-            priority: priority,
+            requester: Some(value.requester.unwrap_or_default().name),
+            priority,
             udf_fields: value.udf_fields,
         }
     }
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct ResponseStatus {
-    pub status: String,
-    pub status_code: i64,
+pub(crate) struct ResponseStatus {
+    pub(crate) status: String,
+    pub(crate) status_code: i64,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub const STATUS_ID_OPEN: u64 = 2;
+pub const STATUS_ID_ASSIGNED: u64 = 5;
+pub const STATUS_ID_CANCELLED: u64 = 7;
+pub const STATUS_ID_CLOSED: u64 = 1;
+pub const STATUS_ID_IN_PROGRESS: u64 = 6;
+pub const STATUS_ID_ONHOLD: u64 = 3;
+pub const STATUS_ID_RESOLVED: u64 = 4;
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Status {
     pub id: String,
     pub name: String,
     pub color: Option<String>,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+impl Status {
+    pub fn open() -> Self {
+        Status {
+            id: STATUS_ID_OPEN.to_string(),
+            name: "Open".to_string(),
+            color: Some("#0066ff".to_string()),
+        }
+    }
+
+    pub fn assigned() -> Self {
+        Status {
+            id: STATUS_ID_ASSIGNED.to_string(),
+            name: "Assigned".to_string(),
+            // blue
+            color: Some("#0000ff".to_string()),
+        }
+    }
+
+    pub fn cancelled() -> Self {
+        Status {
+            id: STATUS_ID_CANCELLED.to_string(),
+            name: "Cancelled".to_string(),
+            // grey
+            color: Some("#999999".to_string()),
+        }
+    }
+
+    pub fn closed() -> Self {
+        Status {
+            id: STATUS_ID_CLOSED.to_string(),
+            name: "Closed".to_string(),
+            color: Some("#006600".to_string()),
+        }
+    }
+
+    pub fn in_progress() -> Self {
+        Status {
+            id: STATUS_ID_IN_PROGRESS.to_string(),
+            name: "In Progress".to_string(),
+            color: Some("#00ffcc".to_string()),
+        }
+    }
+
+    pub fn onhold() -> Self {
+        Status {
+            id: STATUS_ID_ONHOLD.to_string(),
+            name: "On Hold".to_string(),
+            color: Some("#ff0000".to_string()),
+        }
+    }
+
+    pub fn resolved() -> Self {
+        Status {
+            id: STATUS_ID_RESOLVED.to_string(),
+            name: "Resolved".to_string(),
+            color: Some("#00ff66".to_string()),
+        }
+    }
+}
+
+/// Priority structure representing the priority of a ticket in SDP.
+/// Contains an ID, name, and an optional color for visual representation.
+///
+/// 'Not specified' priority is represented by None, which is the default value for the Priority struct.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Priority {
     pub id: String,
     pub name: String,
     pub color: Option<String>,
+}
+
+pub const PRIORITY_ID_LOW: u64 = 1;
+pub const PRIORITY_ID_MEDIUM: u64 = 3;
+pub const PRIORITY_ID_HIGH: u64 = 4;
+pub const PRIORITY_ID_CRITICAL: u64 = 301;
+
+// priority: Some(
+//     Priority {
+//         id: "1",
+//         name: "Low",
+//         color: Some(
+//             "#288251",
+//         ),
+//     },
+//
+// priority: Some(
+//     Priority {
+//         id: "3",
+//         name: "Medium",
+//         color: Some(
+//             "#efb116",
+//         ),
+//     },
+// ),
+//
+//     Priority {
+//         priority: Some(
+//         id: "4",
+//         name: "High",
+//         color: Some(
+//             "#ff5e00",
+//         ),
+//     },
+// ),
+//
+// priority: Some(
+//     Priority {
+//         id: "301",
+//         name: "Critical",
+//         color: Some(
+//             "#8b0808",
+//         ),
+//     },
+// ),
+impl Priority {
+    pub fn low() -> Self {
+        Priority {
+            id: PRIORITY_ID_LOW.to_string(),
+            name: "Low".to_string(),
+            color: Some("#288251".to_string()),
+        }
+    }
+
+    pub fn medium() -> Self {
+        Priority {
+            id: PRIORITY_ID_MEDIUM.to_string(),
+            name: "Medium".to_string(),
+            color: Some("#efb116".to_string()),
+        }
+    }
+
+    pub fn high() -> Self {
+        Priority {
+            id: PRIORITY_ID_HIGH.to_string(),
+            name: "High".to_string(),
+            color: Some("#ff5e00".to_string()),
+        }
+    }
+
+    /// Suspiciously high internal ID, might be specific to our SDP instance.
+    /// Please verify on your end if this ID is correct for the Critical priority, or if it needs to be adjusted.
+    pub fn critical() -> Self {
+        Priority {
+            id: PRIORITY_ID_CRITICAL.to_string(),
+            name: "Critical".to_string(),
+            color: Some("#8b0808".to_string()),
+        }
+    }
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -751,18 +918,34 @@ struct CreateTicketRequest<'a> {
     request: &'a CreateTicketData,
 }
 
-#[derive(Serialize, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct CreateTicketData {
     pub subject: String,
     pub description: String,
-    pub requester: NameWrapper,
-    pub priority: NameWrapper,
+    #[serde(
+        serialize_with = "serialize_name_object",
+        deserialize_with = "deserialize_name_object"
+    )]
+    pub requester: String,
+    #[serde(
+        serialize_with = "serialize_name_object",
+        deserialize_with = "deserialize_name_object"
+    )]
+    pub priority: String,
     // Can't do much here, since these fields seem to be dynamically defined
     // per template at SDP. They need to be explicitly deserialized by the user
     // after we've converted them to plain serde_json::Value.
     pub udf_fields: Value,
-    pub account: NameWrapper,
-    pub template: NameWrapper,
+    #[serde(
+        serialize_with = "serialize_name_object",
+        deserialize_with = "deserialize_name_object"
+    )]
+    pub account: String,
+    #[serde(
+        serialize_with = "serialize_name_object",
+        deserialize_with = "deserialize_name_object"
+    )]
+    pub template: String,
 }
 
 impl Default for CreateTicketData {
@@ -770,18 +953,67 @@ impl Default for CreateTicketData {
         CreateTicketData {
             subject: String::new(),
             description: String::new(),
-            requester: NameWrapper::new(""),
-            priority: NameWrapper::new("Low"),
+            requester: String::new(),
+            priority: "Low".to_string(),
             udf_fields: Value::Null,
-            account: NameWrapper::new(""),
-            template: NameWrapper::new(""),
+            account: String::new(),
+            template: String::new(),
         }
     }
 }
 
+pub(crate) fn deserialize_name_object<'de, D>(deserializer: D) -> Result<String, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    #[derive(Deserialize)]
+    struct NameObject {
+        name: String,
+    }
+
+    Ok(NameObject::deserialize(deserializer)?.name)
+}
+
+pub(crate) fn deserialize_optional_name_object<'de, D>(
+    deserializer: D,
+) -> Result<Option<String>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    #[derive(Deserialize)]
+    struct NameObject {
+        name: String,
+    }
+
+    Ok(Option::<NameObject>::deserialize(deserializer)?.map(|name| name.name))
+}
+
+pub(crate) fn serialize_name_object<S>(name: &String, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    let mut s = serializer.serialize_struct("NameWrapper", 1)?;
+    s.serialize_field("name", name)?;
+    s.end()
+}
+
+pub(crate) fn serialize_optional_name_object<S>(
+    maybe_name: &Option<String>,
+    serializer: S,
+) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    match maybe_name {
+        Some(name) => serialize_name_object(name, serializer),
+        None => serializer.serialize_none(),
+    }
+}
+
+#[allow(dead_code)]
 #[derive(Serialize, Debug, PartialEq, Eq)]
-pub struct NameWrapper {
-    pub name: String,
+pub(crate) struct NameWrapper {
+    pub(crate) name: String,
 }
 
 impl From<&str> for NameWrapper {
@@ -791,14 +1023,10 @@ impl From<&str> for NameWrapper {
         }
     }
 }
+
 impl From<String> for NameWrapper {
     fn from(name: String) -> Self {
         Self { name }
-    }
-}
-impl NameWrapper {
-    pub fn new(name: impl Into<String>) -> Self {
-        Self { name: name.into() }
     }
 }
 
@@ -848,8 +1076,8 @@ pub struct NoteData {
 
 // Note response structures
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct NoteResponse {
-    pub note: Note,
+pub(crate) struct NoteResponse {
+    pub(crate) note: Note,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -871,7 +1099,7 @@ pub struct ListInfoResponse {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Note {
-    pub id: String,
+    pub id: NoteID,
     #[serde(default)]
     pub description: String,
     #[serde(default)]
@@ -926,9 +1154,13 @@ struct AssignTicketRequest {
     request: AssignTicketData,
 }
 
-#[derive(Serialize, Debug, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
 struct AssignTicketData {
-    technician: NameWrapper,
+    #[serde(
+        serialize_with = "serialize_name_object",
+        deserialize_with = "deserialize_name_object"
+    )]
+    technician: String,
 }
 
 #[derive(Serialize, Debug, PartialEq, Eq)]
@@ -942,21 +1174,20 @@ struct MergeRequestId {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct TicketResponse {
-    pub request: TicketData,
-    pub response_status: ResponseStatus,
+pub(crate) struct TicketResponse {
+    pub(crate) request: TicketData,
+    pub(crate) response_status: ResponseStatus,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TicketData {
-    #[serde(deserialize_with = "deserialize_number_from_string")]
-    pub id: u64,
+    pub id: TicketID,
     pub subject: String,
-    pub description: String,
+    pub description: Option<String>,
     pub status: Status,
-    pub priority: Priority,
+    pub priority: Option<Priority>,
     pub created_time: TimeEntry,
-    pub requester: UserInfo,
+    pub requester: Option<UserInfo>,
     pub account: Account,
     pub template: TemplateInfo,
     pub udf_fields: Option<Value>,
@@ -971,6 +1202,7 @@ pub struct TemplateInfo {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
 
     #[test]
     fn criteria_default() {
@@ -987,10 +1219,69 @@ mod tests {
         let data = CreateTicketData::default();
         assert!(data.subject.is_empty());
         assert!(data.description.is_empty());
-        assert!(data.requester.name.is_empty());
-        assert_eq!(data.priority.name, "Low");
+        assert!(data.requester.is_empty());
+        assert_eq!(data.priority, "Low");
         assert!(data.udf_fields.is_null());
-        assert!(data.account.name.is_empty());
-        assert!(data.template.name.is_empty());
+        assert!(data.account.is_empty());
+        assert!(data.template.is_empty());
+    }
+
+    #[test]
+    fn create_ticket_data_serializes_name_fields_as_objects() {
+        let data = CreateTicketData {
+            subject: "test".to_string(),
+            description: "body".to_string(),
+            requester: "NETXP".to_string(),
+            priority: "High".to_string(),
+            udf_fields: json!({}),
+            account: "SOC".to_string(),
+            template: "SOC-with-alert-id".to_string(),
+        };
+
+        let serialized = serde_json::to_value(&data).unwrap();
+
+        assert_eq!(serialized["requester"], json!({ "name": "NETXP" }));
+        assert_eq!(serialized["priority"], json!({ "name": "High" }));
+        assert_eq!(serialized["account"], json!({ "name": "SOC" }));
+        assert_eq!(
+            serialized["template"],
+            json!({ "name": "SOC-with-alert-id" })
+        );
+    }
+
+    #[test]
+    fn edit_ticket_data_serializes_optional_name_fields_as_objects() {
+        let data = EditTicketData {
+            subject: "test".to_string(),
+            status: Status {
+                id: "1".to_string(),
+                name: "Open".to_string(),
+                color: None,
+            },
+            description: None,
+            requester: Some("NETXP".to_string()),
+            priority: Some("High".to_string()),
+            udf_fields: None,
+        };
+
+        let serialized = serde_json::to_value(&data).unwrap();
+
+        assert_eq!(serialized["requester"], json!({ "name": "NETXP" }));
+        assert_eq!(serialized["priority"], json!({ "name": "High" }));
+    }
+
+    #[test]
+    fn deserialize_name_helpers_extract_name_values() {
+        let mut name_de = serde_json::Deserializer::from_str(r#"{ "name": "High" }"#);
+        let name = deserialize_name_object(&mut name_de).unwrap();
+        assert_eq!(name, "High");
+
+        let mut some_de = serde_json::Deserializer::from_str(r#"{ "name": "NETXP" }"#);
+        let maybe_name = deserialize_optional_name_object(&mut some_de).unwrap();
+        assert_eq!(maybe_name, Some("NETXP".to_string()));
+
+        let mut none_de = serde_json::Deserializer::from_str("null");
+        let none_name = deserialize_optional_name_object(&mut none_de).unwrap();
+        assert_eq!(none_name, None);
     }
 }
