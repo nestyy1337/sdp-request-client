@@ -965,20 +965,6 @@ where
     Ok(NameObject::deserialize(deserializer)?.name)
 }
 
-pub(crate) fn deserialize_optional_name_object<'de, D>(
-    deserializer: D,
-) -> Result<Option<String>, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    #[derive(Deserialize)]
-    struct NameObject {
-        name: String,
-    }
-
-    Ok(Option::<NameObject>::deserialize(deserializer)?.map(|name| name.name))
-}
-
 pub(crate) fn serialize_name_object<S>(name: &String, serializer: S) -> Result<S::Ok, S::Error>
 where
     S: Serializer,
@@ -986,19 +972,6 @@ where
     let mut s = serializer.serialize_struct("NameWrapper", 1)?;
     s.serialize_field("name", name)?;
     s.end()
-}
-
-pub(crate) fn serialize_optional_name_object<S>(
-    maybe_name: &Option<String>,
-    serializer: S,
-) -> Result<S::Ok, S::Error>
-where
-    S: Serializer,
-{
-    match maybe_name {
-        Some(name) => serialize_name_object(name, serializer),
-        None => serializer.serialize_none(),
-    }
 }
 
 #[allow(dead_code)]
@@ -1259,20 +1232,5 @@ mod tests {
 
         assert_eq!(serialized["requester"], json!({ "name": "NETXP" }));
         assert_eq!(serialized["priority"], json!({ "name": "High" }));
-    }
-
-    #[test]
-    fn deserialize_name_helpers_extract_name_values() {
-        let mut name_de = serde_json::Deserializer::from_str(r#"{ "name": "High" }"#);
-        let name = deserialize_name_object(&mut name_de).unwrap();
-        assert_eq!(name, "High");
-
-        let mut some_de = serde_json::Deserializer::from_str(r#"{ "name": "NETXP" }"#);
-        let maybe_name = deserialize_optional_name_object(&mut some_de).unwrap();
-        assert_eq!(maybe_name, Some("NETXP".to_string()));
-
-        let mut none_de = serde_json::Deserializer::from_str("null");
-        let none_name = deserialize_optional_name_object(&mut none_de).unwrap();
-        assert_eq!(none_name, None);
     }
 }

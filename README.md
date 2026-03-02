@@ -21,7 +21,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Url::parse("https://sdp.example.com")?,
         Credentials::Token { token: "YOUR_TOKEN".into() },
         ServiceDeskOptions::default(),
-    );
+    )?;
 
     // Search for open tickets
     let tickets = client.tickets()

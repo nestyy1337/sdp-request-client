@@ -120,7 +120,7 @@ impl<'a> TicketClient<'a> {
         }
         if let Ok(attachments) = self.client.get_conversation_attachment_urls(self.id).await {
             for url in attachments {
-                links.push(format!("{}{}", self.client.base_url, url));
+                links.push(url);
             }
         }
         Ok(links)

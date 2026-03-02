@@ -6,7 +6,7 @@
 use reqwest::Url;
 use sdp_request_client::{
     Credentials, EditTicketData, NoteID, Priority, ServiceDesk, ServiceDeskOptions, Status,
-    TicketID, UserID, UserInfo,
+    TicketID,
 };
 
 fn setup() -> ServiceDesk {
