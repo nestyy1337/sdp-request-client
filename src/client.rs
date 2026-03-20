@@ -238,7 +238,7 @@ impl ServiceDesk {
         let resp: Value = self.request_with_path(Method::GET, content_url).await?;
         let attachment: Vec<Attachment> = serde_json::from_value(
             resp.get("notification")
-                .unwrap_or_default()
+                .unwrap_or(&Value::Null)
                 .get("attachments")
                 .cloned()
                 .unwrap_or_default(),
