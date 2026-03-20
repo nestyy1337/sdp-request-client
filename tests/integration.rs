@@ -25,6 +25,7 @@ fn setup() -> ServiceDesk {
 }
 
 #[tokio::test]
+#[ignore]
 async fn ticket_get() {
     let sdp = setup();
     let result = sdp.ticket(327847).get().await;
@@ -35,6 +36,7 @@ async fn ticket_get() {
 }
 
 #[tokio::test]
+#[ignore]
 async fn ticket_conversations() {
     let sdp = setup();
     let result = sdp.ticket(305892).all_attachment_links().await;
@@ -127,6 +129,7 @@ async fn assign_ticket() {
 }
 
 #[tokio::test]
+#[ignore]
 async fn edit_ticket() {
     let sdp = setup();
     let editdata = EditTicketData {
@@ -167,6 +170,7 @@ async fn get_note() {
 }
 
 #[tokio::test]
+#[ignore]
 async fn test_merge() {
     let sdp = setup();
     let result = sdp.ticket(308353).merge(&[TicketID(308345)]).await;

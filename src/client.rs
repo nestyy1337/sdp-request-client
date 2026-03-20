@@ -1203,6 +1203,7 @@ mod tests {
         };
 
         let serialized = serde_json::to_value(&data).unwrap();
+        println!("Serialized CreateTicketData: {}", serialized);
 
         assert_eq!(serialized["requester"], json!({ "name": "NETXP" }));
         assert_eq!(serialized["priority"], json!({ "name": "High" }));
@@ -1223,14 +1224,20 @@ mod tests {
                 color: None,
             },
             description: None,
-            requester: None,
+            requester: Some(UserInfo {
+                id: UserID("123".to_string()),
+                name: "NETXP".to_string(),
+                ..Default::default()
+            }),
             priority: Some(Priority::high()),
             udf_fields: None,
         };
 
         let serialized = serde_json::to_value(&data).unwrap();
 
-        assert_eq!(serialized["requester"], json!({ "name": "NETXP" }));
-        assert_eq!(serialized["priority"], json!({ "name": "High" }));
+        assert_eq!(serialized["requester"]["name"], "NETXP");
+        assert_eq!(serialized["priority"]["name"], "High");
+        assert!(serialized["description"].is_null());
+        assert_eq!(serialized["status"]["name"], "Open");
     }
 }
