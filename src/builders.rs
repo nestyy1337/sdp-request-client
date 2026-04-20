@@ -157,6 +157,11 @@ impl<'a> TicketClient<'a> {
         self.client.merge(self.id, ticket_ids).await
     }
 
+    /// List IDs of tickets that were merged into this ticket.
+    pub async fn merged_ticket_ids(&self) -> Result<Vec<TicketID>, Error> {
+        self.client.merged_ticket_ids(self.id).await
+    }
+
     /// Edit ticket fields.
     pub async fn edit(&self, data: &EditTicketData) -> Result<(), Error> {
         self.client.edit(self.id, data).await

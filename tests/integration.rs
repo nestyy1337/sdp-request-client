@@ -37,6 +37,15 @@ async fn ticket_get() {
 
 #[tokio::test]
 #[ignore]
+async fn ticket_conversations_all() {
+    let sdp = setup();
+    let result = sdp.ticket(575493).conversations().await;
+    dbg!(&result);
+    assert!(result.is_ok());
+}
+
+#[tokio::test]
+#[ignore]
 async fn ticket_conversations() {
     let sdp = setup();
     let result = sdp.ticket(305892).all_attachment_links().await;
@@ -175,6 +184,14 @@ async fn test_merge() {
     let sdp = setup();
     let result = sdp.ticket(308353).merge(&[TicketID(308345)]).await;
     assert!(result.is_ok());
+}
+
+#[tokio::test]
+#[ignore]
+async fn merged_ticket_ids() {
+    let sdp = setup();
+    let merged = sdp.ticket(575493).merged_ticket_ids().await.unwrap();
+    assert_eq!(merged, vec![TicketID(575483)]);
 }
 
 #[tokio::test]

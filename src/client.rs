@@ -246,6 +246,36 @@ impl ServiceDesk {
         Ok(attachment)
     }
 
+    /// List ticket IDs that were merged into the given parent ticket.
+    ///
+    /// SDP exposes merge events only as MERGE entries in the parent's conversation
+    /// history, there is no dedicated read endpoint. Each MERGE entry carries a
+    /// `merged_request_id` that identifies the absorbed child.
+    pub async fn merged_ticket_ids(
+        &self,
+        ticket_id: impl Into<TicketID>,
+    ) -> Result<Vec<TicketID>, Error> {
+        let ticket_id = ticket_id.into();
+        let conversations = self.get_conversations_typed(ticket_id).await?;
+        let mut merged = Vec::new();
+        for conversation in conversations.conversations {
+            let Some(content_url) = conversation.content_url.as_deref() else {
+                continue;
+            };
+            let body: Value = self.request_with_path(Method::GET, content_url).await?;
+            let notification = &body["notification"];
+            if notification["notification_history"]["operation"] != "MERGE" {
+                continue;
+            }
+            if let Some(id) = notification["merged_request_id"].as_str()
+                && let Ok(id) = id.parse::<u64>()
+            {
+                merged.push(TicketID(id));
+            }
+        }
+        Ok(merged)
+    }
+
     pub async fn get_conversation_attachment_urls(
         &self,
         ticket_id: impl Into<TicketID>,
