@@ -365,6 +365,23 @@ impl ServiceDesk {
         Ok(resp.note)
     }
 
+    pub async fn add_worklog(
+        &self,
+        ticket_id: impl Into<TicketID>,
+        worklog: &WorklogData,
+    ) -> Result<Value, Error> {
+        let ticket_id = ticket_id.into();
+        tracing::info!(ticket_id = %ticket_id, "adding worklog");
+        let resp: Value = self
+            .request_input_data(
+                Method::POST,
+                &format!("/api/v3/requests/{}/worklogs", ticket_id),
+                &AddWorklogRequest { worklog },
+            )
+            .await?;
+        Ok(resp)
+    }
+
     /// Get a specific note from a ticket.
     pub async fn get_note(
         &self,
@@ -569,6 +586,7 @@ impl ServiceDesk {
 use serde::Deserialize;
 use serde_json::Value;
 
+use crate::builders::WorklogData;
 use crate::{NoteID, ServiceDesk, TicketID, UserID, error::Error};
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
@@ -1057,6 +1075,11 @@ struct ClosureInfo {
 #[derive(Serialize, Debug)]
 struct AddNoteRequest<'a> {
     note: &'a NoteData,
+}
+
+#[derive(Serialize, Debug)]
+struct AddWorklogRequest<'a> {
+    worklog: &'a WorklogData,
 }
 
 #[derive(Serialize, Debug, Default, PartialEq, Eq)]

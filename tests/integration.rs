@@ -6,7 +6,7 @@
 use reqwest::Url;
 use sdp_request_client::{
     Credentials, EditTicketData, NoteID, Priority, ServiceDesk, ServiceDeskOptions, Status,
-    TicketID,
+    TicketID, UserID, UserInfo, WorklogBuilder,
 };
 
 fn setup() -> ServiceDesk {
@@ -28,11 +28,41 @@ fn setup() -> ServiceDesk {
 #[ignore]
 async fn ticket_get() {
     let sdp = setup();
-    let result = sdp.ticket(327847).get().await;
+    let result = sdp.ticket(583548).get().await;
     dbg!(&result);
     assert!(result.is_ok());
     let ticket = result.unwrap();
     assert_eq!(ticket.id, TicketID(285015));
+}
+
+#[tokio::test]
+#[ignore]
+async fn worklog_add() {
+    let sdp = setup();
+    let result = sdp
+        .ticket(583588)
+        .add_worklog(
+            &WorklogBuilder::new()
+                .description("Worklog added via builder")
+                .owner(UserInfo {
+                    id: UserID("1541".to_string()),
+                    name: "test".to_string(),
+                    email_id: None,
+                    account: None,
+                    department: None,
+                    is_vipuser: false,
+                    mobile: None,
+                    org_user_status: None,
+                    phone: None,
+                    profile_pic: None,
+                })
+                .mark_first_response()
+                .build()
+                .unwrap(),
+        )
+        .await;
+    dbg!(&result);
+    assert!(result.is_ok());
 }
 
 #[tokio::test]
@@ -119,13 +149,13 @@ async fn add_note() {
 #[ignore]
 async fn note_with_options() {
     let sdp = setup();
-    let result = sdp
+    let note = sdp
         .ticket(65997)
         .note()
         .description("Note with options via builder")
         .show_to_requester()
-        .send()
-        .await;
+        .build();
+    let result = sdp.add_note(65997, &note).await;
     assert!(result.is_ok());
 }
 
@@ -198,12 +228,12 @@ async fn merged_ticket_ids() {
 #[ignore]
 async fn create_delete_note() {
     let sdp = setup();
-    let create_result = sdp
+    let note = sdp
         .ticket(250225)
         .note()
         .description("Note to be deleted")
-        .send()
-        .await;
+        .build();
+    let create_result = sdp.add_note(250225, &note).await;
     assert!(create_result.is_ok());
     let created_note = create_result.unwrap();
 

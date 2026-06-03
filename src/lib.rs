@@ -49,7 +49,7 @@ mod error;
 pub use crate::auth::Credentials;
 pub use builders::{
     NoteBuilder, TicketClient, TicketCreateBuilder, TicketSearchBuilder, TicketStatus,
-    TicketsClient,
+    TicketsClient, WorklogBuilder,
 };
 pub use client::{
     Account, Attachment, Condition, CreateTicketData, Criteria, DetailedTicket, EditTicketData,

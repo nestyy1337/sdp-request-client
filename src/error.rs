@@ -88,6 +88,8 @@ pub enum Error {
     FormEncoding(#[from] serde_urlencoded::ser::Error),
     #[error("SDP error (code {code}): {message}")]
     Sdp { code: u32, message: String },
+    #[error("Required field missing: {0}")]
+    FieldRequired(String),
     #[error("{0}")]
     Other(String),
 }

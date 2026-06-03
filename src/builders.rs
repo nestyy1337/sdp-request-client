@@ -33,10 +33,11 @@
 
 use chrono::{DateTime, Local};
 use reqwest::Method;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::{
-    ServiceDesk, TicketID,
+    ServiceDesk, TicketID, UserInfo,
     client::{
         Condition, CreateTicketData, Criteria, DetailedTicket, EditTicketData, ListInfo, LogicalOp,
         Note, NoteData, SearchRequest, TicketData, TicketSearchResponse,
@@ -139,11 +140,13 @@ impl<'a> TicketClient<'a> {
             .await
     }
 
+    pub async fn add_worklog(&self, worklog: &WorklogData) -> Result<Value, Error> {
+        self.client.add_worklog(self.id, worklog).await
+    }
+
     /// Start building a note with custom settings.
-    pub fn note(&self) -> NoteBuilder<'a> {
+    pub fn note(&self) -> NoteBuilder {
         NoteBuilder {
-            client: self.client,
-            ticket_id: self.id,
             description: String::new(),
             mark_first_response: false,
             add_to_linked_requests: false,
@@ -437,9 +440,7 @@ impl<'a> TicketCreateBuilder<'a> {
 /// Builder for adding notes with custom settings.
 ///
 /// All boolean options default to `false`.
-pub struct NoteBuilder<'a> {
-    client: &'a ServiceDesk,
-    ticket_id: TicketID,
+pub struct NoteBuilder {
     description: String,
     mark_first_response: bool,
     add_to_linked_requests: bool,
@@ -447,7 +448,7 @@ pub struct NoteBuilder<'a> {
     show_to_requester: bool,
 }
 
-impl<'a> NoteBuilder<'a> {
+impl NoteBuilder {
     /// Set the note content.
     pub fn description(mut self, description: impl Into<String>) -> Self {
         self.description = description.into();
@@ -478,18 +479,117 @@ impl<'a> NoteBuilder<'a> {
         self
     }
 
-    /// Add the note.
-    pub async fn send(self) -> Result<Note, Error> {
-        let note = NoteData {
+    pub fn build(self) -> NoteData {
+        NoteData {
             description: self.description,
             mark_first_response: self.mark_first_response,
             add_to_linked_requests: self.add_to_linked_requests,
             notify_technician: self.notify_technician,
             show_to_requester: self.show_to_requester,
-        };
+        }
+    }
+}
 
-        let note = self.client.add_note(self.ticket_id, &note).await?;
-        Ok(note)
+#[derive(Debug, Serialize, Deserialize)]
+pub struct WorklogData {
+    owner: UserInfo,
+    description: String,
+    #[serde(serialize_with = "serialize_sdp_time")]
+    start_time: DateTime<Local>,
+    #[serde(serialize_with = "serialize_sdp_time")]
+    end_time: DateTime<Local>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    exchange_rate: Option<f64>,
+    mark_first_response: bool,
+    include_nonoperational_hours: bool,
+}
+
+fn serialize_sdp_time<S>(dt: &DateTime<Local>, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: serde::Serializer,
+{
+    use serde::ser::SerializeStruct;
+    let mut s = serializer.serialize_struct("SdpTime", 1)?;
+    s.serialize_field("value", &dt.timestamp_millis())?;
+    s.end()
+}
+
+pub struct WorklogBuilder {
+    owner: Option<UserInfo>,
+    description: Option<String>,
+    start_time: Option<DateTime<Local>>,
+    end_time: Option<DateTime<Local>>,
+    exchange_rate: Option<f64>,
+    mark_first_response: Option<bool>,
+    include_nonoperational_hours: Option<bool>,
+}
+
+impl WorklogBuilder {
+    pub fn new() -> Self {
+        Self {
+            owner: None,
+            description: None,
+            start_time: None,
+            end_time: None,
+            exchange_rate: None,
+            mark_first_response: None,
+            include_nonoperational_hours: None,
+        }
+    }
+
+    pub fn owner(mut self, owner: UserInfo) -> Self {
+        self.owner = Some(owner);
+        self
+    }
+
+    /// Set the worklog description.
+    pub fn description(mut self, description: impl Into<String>) -> Self {
+        self.description = Some(description.into());
+        self
+    }
+
+    /// Set the worklog start time.
+    pub fn start_time(mut self, start_time: DateTime<Local>) -> Self {
+        self.start_time = Some(start_time);
+        self
+    }
+
+    /// Set the worklog end time.
+    pub fn end_time(mut self, end_time: DateTime<Local>) -> Self {
+        self.end_time = Some(end_time);
+        self
+    }
+
+    /// Set the exchange rate for cost calculation.
+    pub fn exchange_rate(mut self, exchange_rate: f64) -> Self {
+        self.exchange_rate = Some(exchange_rate);
+        self
+    }
+
+    /// Mark as first response.
+    pub fn mark_first_response(mut self) -> Self {
+        self.mark_first_response = Some(true);
+        self
+    }
+
+    /// Include non-operational hours in time calculation.
+    pub fn include_nonoperational_hours(mut self) -> Self {
+        self.include_nonoperational_hours = Some(true);
+        self
+    }
+
+    pub fn build(self) -> Result<WorklogData, Error> {
+        Ok(WorklogData {
+            owner: self
+                .owner
+                .ok_or_else(|| Error::FieldRequired("owner".to_string()))?,
+            description: self.description.unwrap_or_default(),
+            start_time: self.start_time.unwrap_or_else(Local::now),
+            end_time: self.end_time.unwrap_or_else(Local::now),
+            exchange_rate: self.exchange_rate,
+            mark_first_response: self.mark_first_response.unwrap_or(false),
+            include_nonoperational_hours: self.include_nonoperational_hours.unwrap_or(false),
+        })
     }
 }
 
