@@ -524,6 +524,12 @@ pub struct WorklogBuilder {
     include_nonoperational_hours: Option<bool>,
 }
 
+impl Default for WorklogBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl WorklogBuilder {
     pub fn new() -> Self {
         Self {
