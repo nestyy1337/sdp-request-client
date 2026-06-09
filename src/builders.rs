@@ -37,7 +37,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::{
-    ServiceDesk, TicketID, UserInfo,
+    Priority, ServiceDesk, TicketID, UserInfo,
     client::{
         Condition, CreateTicketData, Criteria, DetailedTicket, EditTicketData, ListInfo, LogicalOp,
         Note, NoteData, SearchRequest, TicketData, TicketSearchResponse,
@@ -68,7 +68,7 @@ impl<'a> TicketsClient<'a> {
             subject: None,
             description: None,
             requester: None,
-            priority: "Low".to_string(),
+            priority: Priority::low(),
             account: None,
             template: None,
             udf_fields: None,
@@ -365,7 +365,7 @@ pub struct TicketCreateBuilder<'a> {
     subject: Option<String>,
     description: Option<String>,
     requester: Option<String>,
-    priority: String,
+    priority: Priority,
     account: Option<String>,
     template: Option<String>,
     udf_fields: Option<Value>,
@@ -391,8 +391,8 @@ impl<'a> TicketCreateBuilder<'a> {
     }
 
     /// Set the priority. Default: "Low".
-    pub fn priority(mut self, priority: impl Into<String>) -> Self {
-        self.priority = priority.into();
+    pub fn priority(mut self, priority: Priority) -> Self {
+        self.priority = priority;
         self
     }
 

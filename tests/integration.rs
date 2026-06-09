@@ -126,7 +126,7 @@ async fn create_ticket() {
         .subject("[TEST] Test Builder API")
         .description("Created via builder pattern")
         .requester("NETXP")
-        .priority("Low")
+        .priority(Priority::low())
         .account("SOC - NETXP")
         .template("SOC-with-alert-id")
         .send()

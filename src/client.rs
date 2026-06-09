@@ -966,11 +966,7 @@ pub struct CreateTicketData {
         deserialize_with = "deserialize_name_object"
     )]
     pub requester: String,
-    #[serde(
-        serialize_with = "serialize_name_object",
-        deserialize_with = "deserialize_name_object"
-    )]
-    pub priority: String,
+    pub priority: Priority,
     // Can't do much here, since these fields seem to be dynamically defined
     // per template at SDP. They need to be explicitly deserialized by the user
     // after we've converted them to plain serde_json::Value.
@@ -993,7 +989,7 @@ impl Default for CreateTicketData {
             subject: String::new(),
             description: String::new(),
             requester: String::new(),
-            priority: "Low".to_string(),
+            priority: Priority::medium(),
             udf_fields: Value::Null,
             account: String::new(),
             template: String::new(),
@@ -1237,7 +1233,7 @@ mod tests {
         assert!(data.subject.is_empty());
         assert!(data.description.is_empty());
         assert!(data.requester.is_empty());
-        assert_eq!(data.priority, "Low");
+        assert_eq!(data.priority, Priority::medium());
         assert!(data.udf_fields.is_null());
         assert!(data.account.is_empty());
         assert!(data.template.is_empty());
@@ -1249,7 +1245,7 @@ mod tests {
             subject: "test".to_string(),
             description: "body".to_string(),
             requester: "NETXP".to_string(),
-            priority: "High".to_string(),
+            priority: Priority::high(),
             udf_fields: json!({}),
             account: "SOC".to_string(),
             template: "SOC-with-alert-id".to_string(),
