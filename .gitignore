@@ -4,3 +4,6 @@ target
 *.pdb
 **/mutants.out*/
 .env
+*.nix
+flake.lock
+Cargo.lock
