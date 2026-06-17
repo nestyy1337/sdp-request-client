@@ -2,7 +2,7 @@
 //!
 //! # Example
 //! ```no_run
-//! # use sdp_request_client::{ServiceDesk, ServiceDeskOptions, Credentials};
+//! # use sdp_request_client::{ServiceDesk, ServiceDeskOptions, Credentials, Priority};
 //! # use reqwest::Url;
 //! # async fn example() -> Result<(), sdp_request_client::Error> {
 //! # let client = ServiceDesk::new(Url::parse("https://sdp.example.com").unwrap(), Credentials::Token { token: "".into() }, ServiceDeskOptions::default()).unwrap();
@@ -19,7 +19,7 @@
 //!     .create()
 //!     .subject("[CLIENT] Alert Name")
 //!     .description("Alert details...")
-//!     .priority("High")
+//!     .priority(Priority::high())
 //!     .requester("CLIENT")
 //!     .send()
 //!     .await?;
@@ -30,6 +30,8 @@
 //! # Ok(())
 //! # }
 //! ```
+
+use std::path::Path;
 
 use chrono::{DateTime, Local};
 use reqwest::Method;
@@ -106,6 +108,10 @@ impl<'a> TicketClient<'a> {
         self.client.get_conversation_content(content_url).await
     }
 
+    pub async fn add_attachment(&self, file_path: impl AsRef<Path>) -> Result<(), Error> {
+        self.client.add_attachment(self.id, file_path).await
+    }
+
     /// Get all attachment links for the ticket, including conversation attachments
     /// including attachments from merged tickets.
     pub async fn all_attachment_links(&self) -> Result<Vec<String>, Error> {
@@ -145,13 +151,30 @@ impl<'a> TicketClient<'a> {
     }
 
     /// Start building a note with custom settings.
-    pub fn note(&self) -> NoteBuilder {
+    pub fn note(&self) -> NoteBuilder<'a> {
         NoteBuilder {
+            client: self.client,
+            id: self.id,
             description: String::new(),
             mark_first_response: false,
             add_to_linked_requests: false,
             notify_technician: false,
             show_to_requester: false,
+        }
+    }
+
+    /// Start building a worklog entry.
+    pub fn worklog(&self) -> WorklogBuilder<'a> {
+        WorklogBuilder {
+            client: self.client,
+            id: self.id,
+            owner: None,
+            description: None,
+            start_time: None,
+            end_time: None,
+            exchange_rate: None,
+            mark_first_response: None,
+            include_nonoperational_hours: None,
         }
     }
 
@@ -440,7 +463,9 @@ impl<'a> TicketCreateBuilder<'a> {
 /// Builder for adding notes with custom settings.
 ///
 /// All boolean options default to `false`.
-pub struct NoteBuilder {
+pub struct NoteBuilder<'a> {
+    client: &'a ServiceDesk,
+    id: TicketID,
     description: String,
     mark_first_response: bool,
     add_to_linked_requests: bool,
@@ -448,7 +473,7 @@ pub struct NoteBuilder {
     show_to_requester: bool,
 }
 
-impl NoteBuilder {
+impl<'a> NoteBuilder<'a> {
     /// Set the note content.
     pub fn description(mut self, description: impl Into<String>) -> Self {
         self.description = description.into();
@@ -479,6 +504,7 @@ impl NoteBuilder {
         self
     }
 
+    /// Build the raw [`NoteData`] without sending it.
     pub fn build(self) -> NoteData {
         NoteData {
             description: self.description,
@@ -487,6 +513,14 @@ impl NoteBuilder {
             notify_technician: self.notify_technician,
             show_to_requester: self.show_to_requester,
         }
+    }
+
+    /// Add the note to the ticket.
+    pub async fn send(self) -> Result<Note, Error> {
+        let client = self.client;
+        let id = self.id;
+        let note = self.build();
+        client.add_note(id, &note).await
     }
 }
 
@@ -514,7 +548,9 @@ where
     s.end()
 }
 
-pub struct WorklogBuilder {
+pub struct WorklogBuilder<'a> {
+    client: &'a ServiceDesk,
+    id: TicketID,
     owner: Option<UserInfo>,
     description: Option<String>,
     start_time: Option<DateTime<Local>>,
@@ -524,25 +560,7 @@ pub struct WorklogBuilder {
     include_nonoperational_hours: Option<bool>,
 }
 
-impl Default for WorklogBuilder {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl WorklogBuilder {
-    pub fn new() -> Self {
-        Self {
-            owner: None,
-            description: None,
-            start_time: None,
-            end_time: None,
-            exchange_rate: None,
-            mark_first_response: None,
-            include_nonoperational_hours: None,
-        }
-    }
-
+impl<'a> WorklogBuilder<'a> {
     pub fn owner(mut self, owner: UserInfo) -> Self {
         self.owner = Some(owner);
         self
@@ -584,6 +602,7 @@ impl WorklogBuilder {
         self
     }
 
+    /// Build the raw [`WorklogData`] without sending it.
     pub fn build(self) -> Result<WorklogData, Error> {
         Ok(WorklogData {
             owner: self
@@ -596,6 +615,14 @@ impl WorklogBuilder {
             mark_first_response: self.mark_first_response.unwrap_or(false),
             include_nonoperational_hours: self.include_nonoperational_hours.unwrap_or(false),
         })
+    }
+
+    /// Add the worklog entry to the ticket.
+    pub async fn send(self) -> Result<Value, Error> {
+        let client = self.client;
+        let id = self.id;
+        let worklog = self.build()?;
+        client.add_worklog(id, &worklog).await
     }
 }
 

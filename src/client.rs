@@ -1,4 +1,5 @@
 use std::collections::HashSet;
+use std::path::Path;
 
 use reqwest::Method;
 use serde::{Deserializer, Serialize, Serializer, de::DeserializeOwned, ser::SerializeStruct};
@@ -39,6 +40,20 @@ impl SdpResponseStatus {
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
 struct SdpGenericResponse {
     response_status: SdpResponseStatus,
+}
+
+/// Response from the `_upload` route. The attachment it returns is *not* yet
+/// bound to the request; its `id` must be referenced in a follow-up request
+/// update to actually attach it.
+#[derive(Debug, Deserialize)]
+struct UploadResponse {
+    attachment: Option<UploadedAttachment>,
+    response_status: SdpResponseStatus,
+}
+
+#[derive(Debug, Deserialize)]
+struct UploadedAttachment {
+    id: String,
 }
 
 impl ServiceDesk {
@@ -192,6 +207,49 @@ impl ServiceDesk {
         let parsed = response.json::<R>().await?;
         tracing::debug!("completed sdp request");
         Ok(parsed)
+    }
+
+    pub async fn add_attachment(
+        &self,
+        ticket_id: impl Into<TicketID>,
+        file_path: impl AsRef<Path>,
+    ) -> Result<(), Error> {
+        let ticket_id = ticket_id.into();
+
+        let upload_path = format!("/api/v3/requests/{}/_upload", &ticket_id);
+        let upload_url = self.base_url.join(&upload_path)?;
+        let form = reqwest::multipart::Form::new()
+            .file("input_file", file_path)
+            .await?;
+
+        tracing::debug!(%upload_url, "uploading attachment");
+        let response = self.inner.post(upload_url).multipart(form).send().await?;
+        let status = response.status();
+        let body = response.text().await?;
+
+        let uploaded: UploadResponse = serde_json::from_str(&body).map_err(|e| {
+            tracing::error!(status = %status, error = %e, body = %body, "failed to parse SDP upload response");
+            Error::from_sdp(
+                status.as_u16() as u32,
+                format!("unexpected SDP upload response (HTTP {status})"),
+                Some(body),
+            )
+        })?;
+        if uploaded.response_status.status_code != 2000 {
+            return Err(uploaded.response_status.into_error());
+        }
+        let attachment_id = uploaded
+            .attachment
+            .ok_or_else(|| Error::Other("SDP upload succeeded but returned no attachment".into()))?
+            .id;
+
+        let bind_path = format!("/api/v3/requests/{}", &ticket_id);
+        let bind_body =
+            serde_json::json!({ "request": { "attachments": [ { "id": attachment_id } ] } });
+        let _: serde_json::Value = self
+            .request_form(Method::PUT, &bind_path, &bind_body)
+            .await?;
+        Ok(())
     }
 
     pub async fn ticket_details(

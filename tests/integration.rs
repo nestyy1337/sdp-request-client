@@ -3,10 +3,12 @@
 //! Set SDP_TEST_TOKEN and SDP_TEST_URL environment variables to run.
 //! These tests are ignored by default. Run with: cargo test --test integration -- --ignored
 
+use std::path::Path;
+
 use reqwest::Url;
 use sdp_request_client::{
     Credentials, EditTicketData, NoteID, Priority, ServiceDesk, ServiceDeskOptions, Status,
-    TicketID, UserID, UserInfo, WorklogBuilder,
+    TicketID, UserID, UserInfo,
 };
 
 fn setup() -> ServiceDesk {
@@ -28,7 +30,7 @@ fn setup() -> ServiceDesk {
 #[ignore]
 async fn ticket_get() {
     let sdp = setup();
-    let result = sdp.ticket(583548).get().await;
+    let result = sdp.ticket(585587).get().await;
     dbg!(&result);
     assert!(result.is_ok());
     let ticket = result.unwrap();
@@ -37,29 +39,36 @@ async fn ticket_get() {
 
 #[tokio::test]
 #[ignore]
+async fn add_attachment() {
+    let sdp = setup();
+    let path = Path::new("/home/szymon/Downloads/BLACK.PNG");
+    let result = sdp.ticket(585627).add_attachment(path).await;
+    dbg!(&result);
+    assert!(result.is_ok());
+}
+
+#[tokio::test]
+#[ignore]
 async fn worklog_add() {
     let sdp = setup();
     let result = sdp
         .ticket(583588)
-        .add_worklog(
-            &WorklogBuilder::new()
-                .description("Worklog added via builder")
-                .owner(UserInfo {
-                    id: UserID("1541".to_string()),
-                    name: "test".to_string(),
-                    email_id: None,
-                    account: None,
-                    department: None,
-                    is_vipuser: false,
-                    mobile: None,
-                    org_user_status: None,
-                    phone: None,
-                    profile_pic: None,
-                })
-                .mark_first_response()
-                .build()
-                .unwrap(),
-        )
+        .worklog()
+        .description("Worklog added via builder")
+        .owner(UserInfo {
+            id: UserID("1541".to_string()),
+            name: "test".to_string(),
+            email_id: None,
+            account: None,
+            department: None,
+            is_vipuser: false,
+            mobile: None,
+            org_user_status: None,
+            phone: None,
+            profile_pic: None,
+        })
+        .mark_first_response()
+        .send()
         .await;
     dbg!(&result);
     assert!(result.is_ok());
@@ -149,13 +158,13 @@ async fn add_note() {
 #[ignore]
 async fn note_with_options() {
     let sdp = setup();
-    let note = sdp
+    let result = sdp
         .ticket(65997)
         .note()
         .description("Note with options via builder")
         .show_to_requester()
-        .build();
-    let result = sdp.add_note(65997, &note).await;
+        .send()
+        .await;
     assert!(result.is_ok());
 }
 
