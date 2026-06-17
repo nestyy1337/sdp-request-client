@@ -1313,7 +1313,10 @@ mod tests {
         println!("Serialized CreateTicketData: {}", serialized);
 
         assert_eq!(serialized["requester"], json!({ "name": "NETXP" }));
-        assert_eq!(serialized["priority"], json!({ "name": "High" }));
+        assert_eq!(
+            serialized["priority"],
+            json!({"color": "#ff5e00", "id": "4", "name": "High"})
+        );
         assert_eq!(serialized["account"], json!({ "name": "SOC" }));
         assert_eq!(
             serialized["template"],
