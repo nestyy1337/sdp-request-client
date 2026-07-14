@@ -7,7 +7,7 @@ use std::path::Path;
 
 use reqwest::Url;
 use sdp_request_client::{
-    Credentials, EditTicketData, NoteID, Priority, ServiceDesk, ServiceDeskOptions, Status,
+    Credentials, EditTicketData, Error, NoteID, Priority, ServiceDesk, ServiceDeskOptions, Status,
     TicketID, UserID, UserInfo,
 };
 
@@ -28,13 +28,17 @@ fn setup() -> ServiceDesk {
 
 #[tokio::test]
 #[ignore]
-async fn ticket_get() {
+async fn merged_ticket_get_returns_parent() {
     let sdp = setup();
-    let result = sdp.ticket(585587).get().await;
-    dbg!(&result);
-    assert!(result.is_ok());
-    let ticket = result.unwrap();
-    assert_eq!(ticket.id, TicketID(285015));
+    let result = sdp.ticket(583550).get().await;
+
+    assert!(matches!(
+        result,
+        Err(Error::RequestMerged {
+            parent_request_id: TicketID(583415),
+            ..
+        })
+    ));
 }
 
 #[tokio::test]
@@ -219,10 +223,18 @@ async fn get_note() {
 
 #[tokio::test]
 #[ignore]
-async fn test_merge() {
+async fn repeated_merge_is_rejected_but_relationship_exists() {
     let sdp = setup();
-    let result = sdp.ticket(308353).merge(&[TicketID(308345)]).await;
-    assert!(result.is_ok());
+    let result = sdp.ticket(583415).merge(&[TicketID(583550)]).await;
+
+    assert!(matches!(
+        result,
+        Err(Error::Forbidden(message))
+            if message == "Operation not supported across accounts."
+    ));
+
+    let merged = sdp.ticket(583415).merged_ticket_ids().await.unwrap();
+    assert!(merged.contains(&TicketID(583550)));
 }
 
 #[tokio::test]

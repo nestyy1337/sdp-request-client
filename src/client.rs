@@ -9,7 +9,7 @@ pub struct InnerResponseMessage {
     status_code: u32,
     #[serde(rename = "type")]
     type_field: String,
-    message: String,
+    message: SdpErrorMessage,
 }
 
 /// Generic SDP response status structure
@@ -23,17 +23,15 @@ pub struct SdpResponseStatus {
     pub status: String,
 }
 
-impl SdpResponseStatus {
-    /// Convert SDP response status to an Error
-    pub fn into_error(self) -> Error {
+impl From<SdpResponseStatus> for Error {
+    fn from(status: SdpResponseStatus) -> Self {
         // Try to get the most specific error code and message from messages array
-        if let Some(messages) = &self.messages
-            && let Some(msg) = messages.first()
-        {
-            return Error::from_sdp(msg.status_code, msg.message.clone(), None);
+        if let Some(message) = status.messages.into_iter().flatten().next() {
+            return Error::from_sdp_message(message.status_code, message.message);
         }
+
         // Fallback to top-level status code
-        Error::from_sdp(self.status_code, self.status, None)
+        Error::from_sdp(status.status_code, status.status, None)
     }
 }
 
@@ -74,7 +72,7 @@ impl ServiceDesk {
         if response.error_for_status_ref().is_err() {
             let error = response.json::<SdpGenericResponse>().await?;
             tracing::error!(error = ?error, "SDP Error Response");
-            return Err(error.response_status.into_error());
+            return Err(error.response_status.into());
         }
 
         let parsed = response.json::<R>().await?;
@@ -103,7 +101,7 @@ impl ServiceDesk {
         if response.error_for_status_ref().is_err() {
             let error = response.json::<SdpGenericResponse>().await?;
             tracing::error!(error = ?error, "SDP Error Response");
-            return Err(error.response_status.into_error());
+            return Err(error.response_status.into());
         }
 
         let parsed = response.json::<R>().await?;
@@ -133,7 +131,7 @@ impl ServiceDesk {
         if response.error_for_status_ref().is_err() {
             let error = response.json::<SdpGenericResponse>().await?;
             tracing::error!(error = ?error, "SDP Error Response");
-            return Err(error.response_status.into_error());
+            return Err(error.response_status.into());
         }
         let result = response.json::<R>().await?;
         tracing::debug!("completed sdp request");
@@ -167,7 +165,7 @@ impl ServiceDesk {
                 )
             })?;
             tracing::error!(error = ?error, "SDP Error Response");
-            return Err(error.response_status.into_error());
+            return Err(error.response_status.into());
         }
 
         let response = response.json::<R>().await.map_err(|e| {
@@ -201,7 +199,7 @@ impl ServiceDesk {
                 )
             })?;
             tracing::error!(error = ?error, "SDP Error Response");
-            return Err(error.response_status.into_error());
+            return Err(error.response_status.into());
         }
 
         let parsed = response.json::<R>().await?;
@@ -236,7 +234,7 @@ impl ServiceDesk {
             )
         })?;
         if uploaded.response_status.status_code != 2000 {
-            return Err(uploaded.response_status.into_error());
+            return Err(uploaded.response_status.into());
         }
         let attachment_id = uploaded
             .attachment
@@ -378,7 +376,7 @@ impl ServiceDesk {
                 )
             })?;
             tracing::error!(error = ?error, "SDP Error Response");
-            return Err(error.response_status.into_error());
+            return Err(error.response_status.into());
         }
         let bytes = response.bytes().await?;
         Ok(bytes.to_vec())
@@ -645,7 +643,10 @@ use serde::Deserialize;
 use serde_json::Value;
 
 use crate::builders::WorklogData;
-use crate::{NoteID, ServiceDesk, TicketID, UserID, error::Error};
+use crate::{
+    NoteID, ServiceDesk, TicketID, UserID,
+    error::{Error, SdpErrorMessage},
+};
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
 pub(crate) struct SearchRequest {

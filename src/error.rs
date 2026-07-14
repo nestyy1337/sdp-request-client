@@ -1,4 +1,7 @@
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
+
+use crate::TicketID;
 
 /// SDP API error codes
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -60,6 +63,11 @@ pub enum Error {
     Forbidden(String),
     #[error("Resource not found: {0}")]
     NotFound(String),
+    #[error("request has been merged into parent {parent_request_id}: {message}")]
+    RequestMerged {
+        parent_request_id: TicketID,
+        message: String,
+    },
     #[error("Invalid value: {0}")]
     InvalidValue(String),
     #[error("Resource already exists (not unique): {0}")]
@@ -96,7 +104,47 @@ pub enum Error {
     Io(#[from] std::io::Error),
 }
 
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
+#[serde(untagged)]
+pub(crate) enum SdpErrorMessage {
+    Merged {
+        parent_request: ParentRequest,
+        message: String,
+    },
+    Text(String),
+    Other(serde_json::Value),
+}
+
+impl SdpErrorMessage {
+    fn into_text(self) -> String {
+        match self {
+            Self::Merged { message, .. } | Self::Text(message) => message,
+            Self::Other(value) => value.to_string(),
+        }
+    }
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
+pub(crate) struct ParentRequest {
+    id: TicketID,
+}
+
 impl Error {
+    pub(crate) fn from_sdp_message(code: u32, response: SdpErrorMessage) -> Self {
+        if let SdpErrorMessage::Merged {
+            parent_request,
+            message,
+        } = response
+        {
+            return Self::RequestMerged {
+                parent_request_id: parent_request.id,
+                message,
+            };
+        }
+
+        Self::from_sdp(code, response.into_text(), None)
+    }
+
     /// Create an error from SDP response status code and message
     pub fn from_sdp(code: u32, message: String, field: Option<String>) -> Self {
         let field_info = field.clone().unwrap_or_else(|| message.clone());
@@ -225,5 +273,24 @@ mod tests {
             Error::InvalidValue(s) => assert_eq!(s, "message"),
             _ => panic!("expected InvalidValue"),
         }
+    }
+
+    #[test]
+    fn structured_merged_response_maps_to_request_merged() {
+        let response: SdpErrorMessage = serde_json::from_value(serde_json::json!({
+            "parent_request": { "id": 583415 },
+            "message": "Request Id(s) 583550 has been Merged with Parent Request 583415."
+        }))
+        .unwrap();
+
+        let error = Error::from_sdp_message(4007, response);
+
+        assert!(matches!(
+            error,
+            Error::RequestMerged {
+                parent_request_id: TicketID(583415),
+                message
+            } if message.contains("583550")
+        ));
     }
 }
