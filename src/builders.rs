@@ -54,6 +54,7 @@ pub struct TicketsClient<'a> {
 
 impl<'a> TicketsClient<'a> {
     /// Start building a ticket search query. Default limit is 100.
+    #[must_use]
     pub fn search(self) -> TicketSearchBuilder<'a> {
         TicketSearchBuilder {
             client: self.client,
@@ -64,6 +65,7 @@ impl<'a> TicketsClient<'a> {
     }
 
     /// Start building a new ticket.
+    #[must_use]
     pub fn create(self) -> TicketCreateBuilder<'a> {
         TicketCreateBuilder {
             client: self.client,
@@ -151,6 +153,7 @@ impl<'a> TicketClient<'a> {
     }
 
     /// Start building a note with custom settings.
+    #[must_use]
     pub fn note(&self) -> NoteBuilder<'a> {
         NoteBuilder {
             client: self.client,
@@ -164,6 +167,7 @@ impl<'a> TicketClient<'a> {
     }
 
     /// Start building a worklog entry.
+    #[must_use]
     pub fn worklog(&self) -> WorklogBuilder<'a> {
         WorklogBuilder {
             client: self.client,
@@ -235,12 +239,13 @@ impl std::fmt::Display for TicketStatus {
             TicketStatus::Cancelled => "Cancelled",
             TicketStatus::OnHold => "On Hold",
         };
-        write!(f, "{}", status_str)
+        write!(f, "{status_str}")
     }
 }
 
-impl<'a> TicketSearchBuilder<'a> {
+impl TicketSearchBuilder<'_> {
     /// Filter by ticket status.
+    #[must_use]
     pub fn status(mut self, status: &str) -> Self {
         self.root_criteria = Some(Criteria {
             field: "status.name".to_string(),
@@ -253,21 +258,25 @@ impl<'a> TicketSearchBuilder<'a> {
     }
 
     /// Filter by ticket status using the [`TicketStatus`] enum.
+    #[must_use]
     pub fn filter(self, filter: &TicketStatus) -> Self {
         self.status(&filter.to_string())
     }
 
     /// Filter by open tickets.
+    #[must_use]
     pub fn open(self) -> Self {
         self.status("Open")
     }
 
     /// Filter by closed tickets.
+    #[must_use]
     pub fn closed(self) -> Self {
         self.status("Closed")
     }
 
     /// Filter tickets created after a given time.
+    #[must_use]
     pub fn created_after(mut self, time: DateTime<Local>) -> Self {
         self.children.push(Criteria {
             field: "created_time".to_string(),
@@ -280,6 +289,7 @@ impl<'a> TicketSearchBuilder<'a> {
     }
 
     /// Filter tickets last updated after a given time.
+    #[must_use]
     pub fn updated_after(mut self, time: DateTime<Local>) -> Self {
         self.children.push(Criteria {
             field: "last_updated_time".to_string(),
@@ -292,6 +302,7 @@ impl<'a> TicketSearchBuilder<'a> {
     }
 
     /// Filter by subject containing a value.
+    #[must_use]
     pub fn subject_contains(mut self, value: &str) -> Self {
         self.children.push(Criteria {
             field: "subject".to_string(),
@@ -328,12 +339,14 @@ impl<'a> TicketSearchBuilder<'a> {
     }
 
     /// Set maximum number of results. Default: 100.
+    #[must_use]
     pub fn limit(mut self, count: u32) -> Self {
         self.row_count = count;
         self
     }
 
     /// Add a raw [`Criteria`] for complex queries.
+    #[must_use]
     pub fn criteria(mut self, criteria: Criteria) -> Self {
         if self.root_criteria.is_none() {
             self.root_criteria = Some(criteria);
@@ -394,7 +407,7 @@ pub struct TicketCreateBuilder<'a> {
     udf_fields: Option<Value>,
 }
 
-impl<'a> TicketCreateBuilder<'a> {
+impl TicketCreateBuilder<'_> {
     /// Set the ticket subject (required).
     pub fn subject(mut self, subject: impl Into<String>) -> Self {
         self.subject = Some(subject.into());
@@ -414,6 +427,7 @@ impl<'a> TicketCreateBuilder<'a> {
     }
 
     /// Set the priority. Default: "Low".
+    #[must_use]
     pub fn priority(mut self, priority: Priority) -> Self {
         self.priority = priority;
         self
@@ -432,6 +446,7 @@ impl<'a> TicketCreateBuilder<'a> {
     }
 
     /// Set custom UDF fields.
+    #[must_use]
     pub fn udf_fields(mut self, fields: Value) -> Self {
         self.udf_fields = Some(fields);
         self
@@ -473,7 +488,7 @@ pub struct NoteBuilder<'a> {
     show_to_requester: bool,
 }
 
-impl<'a> NoteBuilder<'a> {
+impl NoteBuilder<'_> {
     /// Set the note content.
     pub fn description(mut self, description: impl Into<String>) -> Self {
         self.description = description.into();
@@ -481,30 +496,35 @@ impl<'a> NoteBuilder<'a> {
     }
 
     /// Mark as first response.
+    #[must_use]
     pub fn mark_first_response(mut self) -> Self {
         self.mark_first_response = true;
         self
     }
 
     /// Add to linked requests.
+    #[must_use]
     pub fn add_to_linked_requests(mut self) -> Self {
         self.add_to_linked_requests = true;
         self
     }
 
     /// Notify the assigned technician.
+    #[must_use]
     pub fn notify_technician(mut self) -> Self {
         self.notify_technician = true;
         self
     }
 
     /// Make visible to the requester.
+    #[must_use]
     pub fn show_to_requester(mut self) -> Self {
         self.show_to_requester = true;
         self
     }
 
     /// Build the raw [`NoteData`] without sending it.
+    #[must_use]
     pub fn build(self) -> NoteData {
         NoteData {
             description: self.description,
@@ -560,7 +580,8 @@ pub struct WorklogBuilder<'a> {
     include_nonoperational_hours: Option<bool>,
 }
 
-impl<'a> WorklogBuilder<'a> {
+impl WorklogBuilder<'_> {
+    #[must_use]
     pub fn owner(mut self, owner: UserInfo) -> Self {
         self.owner = Some(owner);
         self
@@ -573,30 +594,35 @@ impl<'a> WorklogBuilder<'a> {
     }
 
     /// Set the worklog start time.
+    #[must_use]
     pub fn start_time(mut self, start_time: DateTime<Local>) -> Self {
         self.start_time = Some(start_time);
         self
     }
 
     /// Set the worklog end time.
+    #[must_use]
     pub fn end_time(mut self, end_time: DateTime<Local>) -> Self {
         self.end_time = Some(end_time);
         self
     }
 
     /// Set the exchange rate for cost calculation.
+    #[must_use]
     pub fn exchange_rate(mut self, exchange_rate: f64) -> Self {
         self.exchange_rate = Some(exchange_rate);
         self
     }
 
     /// Mark as first response.
+    #[must_use]
     pub fn mark_first_response(mut self) -> Self {
         self.mark_first_response = Some(true);
         self
     }
 
     /// Include non-operational hours in time calculation.
+    #[must_use]
     pub fn include_nonoperational_hours(mut self) -> Self {
         self.include_nonoperational_hours = Some(true);
         self
@@ -628,6 +654,7 @@ impl<'a> WorklogBuilder<'a> {
 
 impl ServiceDesk {
     /// Get a client for ticket collection operations.
+    #[must_use]
     pub fn tickets(&self) -> TicketsClient<'_> {
         TicketsClient { client: self }
     }

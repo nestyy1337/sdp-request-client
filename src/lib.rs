@@ -1,4 +1,4 @@
-//! Async Rust client for the ManageEngine ServiceDesk Plus REST API v3.
+//! Async Rust client for the `ManageEngine` `ServiceDesk` Plus REST API v3.
 //!
 //! # Quick Start
 //!
@@ -79,7 +79,7 @@ pub struct NoteID(pub u64);
 /// Visitor that accepts either a number or a string and parses to u64.
 struct StringOrNumberU64Visitor;
 
-impl<'de> serde::de::Visitor<'de> for StringOrNumberU64Visitor {
+impl serde::de::Visitor<'_> for StringOrNumberU64Visitor {
     type Value = u64;
 
     fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
@@ -193,7 +193,7 @@ impl std::fmt::Display for UserID {
     }
 }
 
-/// Main client for interacting with ServiceDesk Plus API.
+/// Main client for interacting with `ServiceDesk` Plus API.
 ///
 /// Use [`tickets()`](Self::tickets) for search/create operations,
 /// or [`ticket(id)`](Self::ticket) for single-ticket operations.
@@ -203,7 +203,7 @@ pub struct ServiceDesk {
     inner: reqwest::Client,
 }
 
-/// Security options for the ServiceDesk client
+/// Security options for the `ServiceDesk` client
 ///
 /// Not finished yet!!
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -212,7 +212,7 @@ pub enum Security {
     NativeTLS,
 }
 
-/// Configuration options for the ServiceDesk client
+/// Configuration options for the `ServiceDesk` client
 #[derive(Clone, Debug)]
 pub struct ServiceDeskOptions {
     pub user_agent: Option<String>,
@@ -239,7 +239,7 @@ impl Default for ServiceDeskOptions {
 }
 
 impl ServiceDesk {
-    /// Create a new ServiceDesk client instance.
+    /// Create a new `ServiceDesk` client instance.
     ///
     /// # Errors
     ///

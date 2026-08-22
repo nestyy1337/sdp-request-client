@@ -146,6 +146,7 @@ impl Error {
     }
 
     /// Create an error from SDP response status code and message
+    #[must_use]
     pub fn from_sdp(code: u32, message: String, field: Option<String>) -> Self {
         let field_info = field.clone().unwrap_or_else(|| message.clone());
 
@@ -161,7 +162,7 @@ impl Error {
                 Error::NotEditable(field_info)
             }
             SdpErrorCode::InternalField => {
-                Error::NotEditable(format!("internal field: {}", field_info))
+                Error::NotEditable(format!("internal field: {field_info}"))
             }
             SdpErrorCode::NoSuchField => Error::NoSuchField(field_info),
             SdpErrorCode::MissingMandatoryField => Error::MissingField(field_info),

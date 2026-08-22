@@ -214,7 +214,7 @@ impl ServiceDesk {
     ) -> Result<(), Error> {
         let ticket_id = ticket_id.into();
 
-        let upload_path = format!("/api/v3/requests/{}/_upload", &ticket_id);
+        let upload_path = format!("/api/v3/requests/{}/_upload", ticket_id);
         let upload_url = self.base_url.join(&upload_path)?;
         let form = reqwest::multipart::Form::new()
             .file("input_file", file_path)
@@ -228,7 +228,7 @@ impl ServiceDesk {
         let uploaded: UploadResponse = serde_json::from_str(&body).map_err(|e| {
             tracing::error!(status = %status, error = %e, body = %body, "failed to parse SDP upload response");
             Error::from_sdp(
-                status.as_u16() as u32,
+                u32::from(status.as_u16()),
                 format!("unexpected SDP upload response (HTTP {status})"),
                 Some(body),
             )
@@ -241,7 +241,7 @@ impl ServiceDesk {
             .ok_or_else(|| Error::Other("SDP upload succeeded but returned no attachment".into()))?
             .id;
 
-        let bind_path = format!("/api/v3/requests/{}", &ticket_id);
+        let bind_path = format!("/api/v3/requests/{}", ticket_id);
         let bind_body =
             serde_json::json!({ "request": { "attachments": [ { "id": attachment_id } ] } });
         let _: serde_json::Value = self
@@ -265,7 +265,7 @@ impl ServiceDesk {
     pub async fn get_conversations(&self, ticket_id: impl Into<TicketID>) -> Result<Value, Error> {
         let ticket_id = ticket_id.into();
         tracing::info!(ticket_id = %ticket_id, "fetching ticket details");
-        let path = format!("/api/v3/requests/{}/conversations", &ticket_id);
+        let path = format!("/api/v3/requests/{}/conversations", ticket_id);
         let resp: Value = self.request_with_path(Method::GET, &path).await?;
         Ok(resp)
     }
@@ -276,7 +276,7 @@ impl ServiceDesk {
     ) -> Result<ConversationsResponse, Error> {
         let ticket_id = ticket_id.into();
         tracing::info!(ticket_id = %ticket_id, "fetching ticket conversations");
-        let path = format!("/api/v3/requests/{}/conversations", &ticket_id);
+        let path = format!("/api/v3/requests/{}/conversations", ticket_id);
         self.request_with_path(Method::GET, &path).await
     }
 
@@ -396,7 +396,7 @@ impl ServiceDesk {
         let _: SdpGenericResponse = self
             .request_input_data(
                 Method::PUT,
-                &format!("/api/v3/requests/{}", ticket_id),
+                &format!("/api/v3/requests/{ticket_id}"),
                 &EditTicketRequest { request: data },
             )
             .await?;
@@ -414,7 +414,7 @@ impl ServiceDesk {
         let resp: NoteResponse = self
             .request_input_data(
                 Method::POST,
-                &format!("/api/v3/requests/{}/notes", ticket_id),
+                &format!("/api/v3/requests/{ticket_id}/notes"),
                 &AddNoteRequest { note },
             )
             .await?;
@@ -431,7 +431,7 @@ impl ServiceDesk {
         let resp: Value = self
             .request_input_data(
                 Method::POST,
-                &format!("/api/v3/requests/{}/worklogs", ticket_id),
+                &format!("/api/v3/requests/{ticket_id}/worklogs"),
                 &AddWorklogRequest { worklog },
             )
             .await?;
@@ -447,7 +447,7 @@ impl ServiceDesk {
         let ticket_id = ticket_id.into();
         let note_id = note_id.into();
         tracing::info!(ticket_id = %ticket_id, note_id = %note_id, "fetching note");
-        let url = format!("/api/v3/requests/{}/notes/{}", ticket_id, note_id);
+        let url = format!("/api/v3/requests/{ticket_id}/notes/{note_id}");
         let resp: NoteResponse = self.request(Method::GET, &url, &"").await?;
         Ok(resp.note)
     }
@@ -470,7 +470,7 @@ impl ServiceDesk {
         let resp: Value = self
             .request_input_data(
                 Method::GET,
-                &format!("/api/v3/requests/{}/notes", ticket_id),
+                &format!("/api/v3/requests/{ticket_id}/notes"),
                 &body,
             )
             .await?;
@@ -491,7 +491,7 @@ impl ServiceDesk {
         let resp: NoteResponse = self
             .request_input_data(
                 Method::PUT,
-                &format!("/api/v3/requests/{}/notes/{}", ticket_id, note_id),
+                &format!("/api/v3/requests/{ticket_id}/notes/{note_id}"),
                 &EditNoteRequest { request_note: note },
             )
             .await?;
@@ -510,7 +510,7 @@ impl ServiceDesk {
         let _: SdpGenericResponse = self
             .request(
                 Method::DELETE,
-                &format!("/api/v3/requests/{}/notes/{}", ticket_id, note_id),
+                &format!("/api/v3/requests/{ticket_id}/notes/{note_id}"),
                 &"",
             )
             .await?;
@@ -528,7 +528,7 @@ impl ServiceDesk {
         let _: SdpGenericResponse = self
             .request_input_data(
                 Method::PUT,
-                &format!("/api/v3/requests/{}/assign", ticket_id),
+                &format!("/api/v3/requests/{ticket_id}/assign"),
                 &AssignTicketRequest {
                     request: AssignTicketData {
                         technician: technician_name.to_string(),
@@ -589,7 +589,7 @@ impl ServiceDesk {
         let _: SdpGenericResponse = self
             .request_json(
                 Method::PUT,
-                &format!("/api/v3/requests/{}/close", ticket_id),
+                &format!("/api/v3/requests/{ticket_id}/close"),
                 &CloseTicketRequest {
                     request: CloseTicketData {
                         closure_info: ClosureInfo {
@@ -631,7 +631,7 @@ impl ServiceDesk {
         let _: SdpGenericResponse = self
             .request_form(
                 Method::PUT,
-                &format!("/api/v3/requests/{}/merge_requests", ticket_id),
+                &format!("/api/v3/requests/{ticket_id}/merge_requests"),
                 &MergeTicketsRequest { merge_requests },
             )
             .await?;
@@ -813,6 +813,7 @@ pub struct Status {
 }
 
 impl Status {
+    #[must_use]
     pub fn open() -> Self {
         Status {
             id: STATUS_ID_OPEN.to_string(),
@@ -821,6 +822,7 @@ impl Status {
         }
     }
 
+    #[must_use]
     pub fn assigned() -> Self {
         Status {
             id: STATUS_ID_ASSIGNED.to_string(),
@@ -830,6 +832,7 @@ impl Status {
         }
     }
 
+    #[must_use]
     pub fn cancelled() -> Self {
         Status {
             id: STATUS_ID_CANCELLED.to_string(),
@@ -839,6 +842,7 @@ impl Status {
         }
     }
 
+    #[must_use]
     pub fn closed() -> Self {
         Status {
             id: STATUS_ID_CLOSED.to_string(),
@@ -847,6 +851,7 @@ impl Status {
         }
     }
 
+    #[must_use]
     pub fn in_progress() -> Self {
         Status {
             id: STATUS_ID_IN_PROGRESS.to_string(),
@@ -855,6 +860,7 @@ impl Status {
         }
     }
 
+    #[must_use]
     pub fn onhold() -> Self {
         Status {
             id: STATUS_ID_ONHOLD.to_string(),
@@ -863,6 +869,7 @@ impl Status {
         }
     }
 
+    #[must_use]
     pub fn resolved() -> Self {
         Status {
             id: STATUS_ID_RESOLVED.to_string(),
@@ -927,6 +934,7 @@ pub const PRIORITY_ID_CRITICAL: u64 = 301;
 //     },
 // ),
 impl Priority {
+    #[must_use]
     pub fn low() -> Self {
         Priority {
             id: PRIORITY_ID_LOW.to_string(),
@@ -935,6 +943,7 @@ impl Priority {
         }
     }
 
+    #[must_use]
     pub fn medium() -> Self {
         Priority {
             id: PRIORITY_ID_MEDIUM.to_string(),
@@ -943,6 +952,7 @@ impl Priority {
         }
     }
 
+    #[must_use]
     pub fn high() -> Self {
         Priority {
             id: PRIORITY_ID_HIGH.to_string(),
@@ -953,6 +963,7 @@ impl Priority {
 
     /// Suspiciously high internal ID, might be specific to our SDP instance.
     /// Please verify on your end if this ID is correct for the Critical priority, or if it needs to be adjusted.
+    #[must_use]
     pub fn critical() -> Self {
         Priority {
             id: PRIORITY_ID_CRITICAL.to_string(),
